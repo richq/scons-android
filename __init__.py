@@ -34,8 +34,10 @@ def NdkBuild(env, library=None, app_root='.',
             build_dir='.', inputs=[]):
     android_manifest = env.File(manifest)
     target = GetAndroidTarget(android_manifest.abspath)
+    verbose = 0 if env.GetOption('silent') else 1
     lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
-                  '$ANDROID_NDK/ndk-build -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-%s -C %s' % (
+                  '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-%s -C %s' % (
+                      verbose,
                       env.GetOption('num_jobs'),
                       env.Dir(build_dir).path, target, env.Dir(app_root).abspath))
     return lib
