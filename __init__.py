@@ -40,6 +40,7 @@ def NdkBuild(env, library=None, app_root='.',
                       verbose,
                       env.GetOption('num_jobs'),
                       env.Dir(build_dir).path, target, env.Dir(app_root).abspath))
+    env.Clean(lib, [os.path.join(app_root, x) for x in ('libs', 'obj')])
     return lib
 
 def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
