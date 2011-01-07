@@ -4,10 +4,13 @@ from SCons.Builder import Builder
 from SCons.Defaults import DirScanner
 from xml.dom import minidom
 
-def get_rfile(fname):
+def GetAndroidPackage(env, fname):
     p = minidom.parse(open(fname))
     m = p.getElementsByTagName('manifest')[0]
-    return os.path.join(m.getAttribute('package').replace('.', '/'), 'R.java')
+    return m.getAttribute('package')
+
+def get_rfile(package):
+    return os.path.join(package.replace('.', '/'), 'R.java')
 
 def TargetFromProperties(fname):
     for line in open(fname).readlines():
@@ -19,7 +22,7 @@ def TargetFromProperties(fname):
             return val.split('-')[1]
     return None
 
-def GetAndroidTarget(fname):
+def GetAndroidTarget(env, fname):
     dp = os.path.join(os.path.dirname(fname), 'default.properties')
     if os.path.exists(dp):
         return TargetFromProperties(dp)
@@ -33,15 +36,41 @@ def NdkBuild(env, library=None, app_root='.',
              manifest='#/AndroidManifest.xml',
             build_dir='.', inputs=[]):
     android_manifest = env.File(manifest)
-    target = GetAndroidTarget(android_manifest.abspath)
     verbose = 0 if env.GetOption('silent') else 1
     lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
-                  '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-%s -C %s' % (
+                  '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-$ANDROID_TARGET -C %s' % (
                       verbose,
                       env.GetOption('num_jobs'),
-                      env.Dir(build_dir).path, target, env.Dir(app_root).abspath))
+                      env.Dir(build_dir).path, env.Dir(app_root).abspath))
     env.Clean(lib, [os.path.join(app_root, x) for x in ('libs', 'obj')])
     return lib
+
+# monkey patch emit_java_classes to do the Right Thing
+# otherwise generated classes have no package name and get rebuilt always
+import SCons.Tool.javac
+
+default_java_emitter = SCons.Tool.javac.emit_java_classes
+
+def emit_java_classes(target, source, env):
+    classdir = target[0]
+    tlist, slist = default_java_emitter(target, source, env)
+    if env.has_key('APP_PACKAGE'):
+        out = []
+        for s in slist:
+            base = s.name.replace('.java', '.class')
+            classname = env['APP_PACKAGE'] + s.name.replace('.java', '')
+            t = classdir.File(env['APP_PACKAGE'].replace('.', '/') + '/' + base)
+            t.attributes.java_classdir = classdir
+            t.attributes.java_sourcedir = s.dir
+            t.attributes.java_classname = classname
+            out.append(t)
+        return out, slist
+    else:
+        return tlist, slist
+
+
+SCons.Tool.javac.emit_java_classes = emit_java_classes
+
 
 def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
               source='src', resources='#/res',
@@ -49,9 +78,14 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
               native_folder='libs'):
     android_manifest = env.File(manifest)
 
-    env['ANDROID_TARGET'] = GetAndroidTarget(android_manifest.abspath)
+    if not env.has_key('ANDROID_TARGET'):
+        env['ANDROID_TARGET'] = env.GetAndroidTarget(android_manifest.abspath)
     env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK','platforms/android-$ANDROID_TARGET/android.jar')
-    rfile = os.path.join('gen', get_rfile(android_manifest.abspath))
+    if not env.has_key('APP_PACKAGE'):
+        package = env.GetAndroidPackage(android_manifest.abspath)
+    else:
+        package = env['APP_PACKAGE']
+    rfile = os.path.join('gen', get_rfile(package))
     gen = env.Dir('gen')
 
     # generate R.java
@@ -68,7 +102,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
         env.Depends(r, resources_depfile)
 
     # compile java to classes
-    bin_classes = 'bin/classes'
+    bin_classes = name.replace('-','_')+'_bin/classes'
     classes = env.Java(target=bin_classes, source=[source],
                        JAVABOOTCLASSPATH='$ANDROID_JAR',
                        JAVASOURCEPATH=gen.path,
@@ -77,7 +111,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     env.Depends(classes, rfile)
 
     # dex file from classes
-    dex = env.Dex('classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
+    dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
 
     # resources
     ap = env.Aapt(name + '.ap_', [env.Dir(resources)],
@@ -182,6 +216,8 @@ def generate(env, **kw):
 
     env.AddMethod(AndroidApp)
     env.AddMethod(NdkBuild)
+    env.AddMethod(GetAndroidTarget)
+    env.AddMethod(GetAndroidPackage)
 
 def exists(env):
     return 1
