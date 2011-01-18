@@ -112,6 +112,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
 
     # dex file from classes
     dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
+    env.Depends(dex, classes)
 
     # resources
     ap = env.Aapt(name + '.ap_', [env.Dir(resources)],
