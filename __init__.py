@@ -48,6 +48,7 @@ def NdkBuild(env, library=None, app_root='.',
 # monkey patch emit_java_classes to do the Right Thing
 # otherwise generated classes have no package name and get rebuilt always
 import SCons.Tool.javac
+from SCons.Tool.JavaCommon import parse_java_file
 
 default_java_emitter = SCons.Tool.javac.emit_java_classes
 
@@ -56,14 +57,26 @@ def emit_java_classes(target, source, env):
     tlist, slist = default_java_emitter(target, source, env)
     if env.has_key('APP_PACKAGE'):
         out = []
+        sourcedir = source[0]
         for s in slist:
             base = s.name.replace('.java', '.class')
             classname = env['APP_PACKAGE'] + s.name.replace('.java', '')
-            t = classdir.File(env['APP_PACKAGE'].replace('.', '/') + '/' + base)
-            t.attributes.java_classdir = classdir
-            t.attributes.java_sourcedir = s.dir
-            t.attributes.java_classname = classname
-            out.append(t)
+            jf = sourcedir.File(env['APP_PACKAGE'].replace('.', '/') + '/' + s.name)
+            if os.path.exists(jf.abspath):
+                version = env.get('JAVAVERSION', '1.4')
+                pkg_dir, classes = parse_java_file(jf.rfile().get_abspath(), version)
+                for c in classes:
+                    t = classdir.File(pkg_dir + '/' + str(c) + '.class')
+                    t.attributes.java_classdir = classdir
+                    t.attributes.java_sourcedir = s.dir
+                    t.attributes.java_classname = str(c)
+                    out.append(t)
+            else:
+                t = classdir.File(env['APP_PACKAGE'].replace('.', '/') + '/' + base)
+                t.attributes.java_classdir = classdir
+                t.attributes.java_sourcedir = s.dir
+                t.attributes.java_classname = classname
+                out.append(t)
         return out, slist
     else:
         return tlist, slist
@@ -112,7 +125,6 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
 
     # dex file from classes
     dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
-    env.Depends(dex, classes)
 
     # resources
     ap = env.Aapt(name + '.ap_', [env.Dir(resources)],
