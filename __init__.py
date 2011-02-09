@@ -22,6 +22,11 @@ def TargetFromProperties(fname):
             return val.split('-')[1]
     return None
 
+def GetAndroidName(env, fname):
+    p = minidom.parse(open(fname))
+    m = p.getElementsByTagName('activity')[0]
+    return m.getAttribute('android:name')
+
 def GetAndroidTarget(env, fname):
     dp = os.path.join(os.path.dirname(fname), 'default.properties')
     if os.path.exists(dp):
@@ -167,7 +172,26 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
         unaligned = env.JarSigner(name + '-unaligned.apk', unaligned)
 
     # zipalign -f 4 unaligned aligned
-    return env.ZipAlign(finalname, unaligned)
+    app = env.ZipAlign(finalname, unaligned)
+    # installation marker
+    adb_install = env.Command(name + '-installed', app,
+        ['adb install -r $SOURCE && date > $TARGET'])
+    # do not run by default
+    env.Ignore(adb_install[0].dir, adb_install)
+    env.Alias('install', adb_install)
+
+    if not env.has_key('APP_ACTIVITY'):
+        activity = env.GetAndroidName(android_manifest.abspath)
+    else:
+        activity = env['APP_ACTIVITY']
+    run = env.Command(name + '-run', app,
+      ['adb shell am start -a android.intent.action.MAIN -n %s/%s%s'%(
+          package, package, activity)])
+    env.Depends(run, adb_install)
+    env.Ignore(run[0].dir, run)
+    env.Alias('run', run)
+
+    return app
 
 def GetVariable(env, variable, exit=True):
     if variable in os.environ:
@@ -231,6 +255,7 @@ def generate(env, **kw):
     env.AddMethod(NdkBuild)
     env.AddMethod(GetAndroidTarget)
     env.AddMethod(GetAndroidPackage)
+    env.AddMethod(GetAndroidName)
 
 def exists(env):
     return 1
