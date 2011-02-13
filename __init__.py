@@ -29,13 +29,13 @@ def GetAndroidName(env, fname):
 
 def GetAndroidTarget(env, fname):
     dp = os.path.join(os.path.dirname(fname), 'default.properties')
-    if os.path.exists(dp):
-        return TargetFromProperties(dp)
     p = minidom.parse(open(fname))
     m = p.getElementsByTagName('uses-sdk')[0]
     minSdk = m.getAttribute('android:minSdkVersion')
     targetSdk = m.getAttribute('android:targetSdkVersion')
-    return targetSdk or minSdk
+    if os.path.exists(dp):
+        targetSdk = TargetFromProperties(dp)
+    return (minSdk, targetSdk or minSdk)
 
 def NdkBuild(env, library=None, app_root='.',
              manifest='#/AndroidManifest.xml',
@@ -43,7 +43,7 @@ def NdkBuild(env, library=None, app_root='.',
     android_manifest = env.File(manifest)
     verbose = 0 if env.GetOption('silent') else 1
     lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
-                  '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-$ANDROID_TARGET -C %s' % (
+                  '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-$ANDROID_MIN_TARGET -C %s' % (
                       verbose,
                       env.GetOption('num_jobs'),
                       env.Dir(build_dir).path, env.Dir(app_root).abspath))
@@ -97,7 +97,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     android_manifest = env.File(manifest)
 
     if not env.has_key('ANDROID_TARGET'):
-        env['ANDROID_TARGET'] = env.GetAndroidTarget(android_manifest.abspath)
+        env['ANDROID_MIN_TARGET'], env['ANDROID_TARGET'] = env.GetAndroidTarget(android_manifest.abspath)
     env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK','platforms/android-$ANDROID_TARGET/android.jar')
     if not env.has_key('APP_PACKAGE'):
         package = env.GetAndroidPackage(android_manifest.abspath)
@@ -216,8 +216,8 @@ def generate(env, **kw):
 
     env.Tool('javac')
     env.Tool('jar')
-    env['AAPT'] = '$ANDROID_SDK/platforms/android-$ANDROID_TARGET/tools/aapt'
-    env['DX'] = '$ANDROID_SDK/platforms/android-$ANDROID_TARGET/tools/dx'
+    env['AAPT'] = '$ANDROID_SDK/platform-tools/aapt'
+    env['DX'] = '$ANDROID_SDK/platform-tools/dx'
     env['ZIPALIGN'] = '$ANDROID_SDK/tools/zipalign'
     env['JARSIGNER'] = 'jarsigner'
 
