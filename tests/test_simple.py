@@ -67,6 +67,15 @@ def getSDK():
     else:
         return os.path.expanduser('~/tools/android-sdk-linux_86')
 
+def create_variant_build(tester):
+    cwd = os.path.normpath(os.getcwd())
+    rootdir = os.path.normpath(os.path.join(cwd, '..'))
+    tester.write_file('SConstruct','''
+from SCons import Tool
+Tool.DefaultToolpath.append('%s')
+SConscript('main.scons', variant_dir='build', duplicate=0)\n''' % (rootdir))
+
+
 def create_android_project(tester):
     srcdir = 'src/com/example/android'
     tester.subdir('res/drawable')
@@ -108,6 +117,7 @@ def create_android_project(tester):
     <uses-sdk android:targetSdkVersion="10" android:minSdkVersion="4" />
 </manifest>
                       ''')
+    return srcdir
 
 def create_android_ndk_project(tester):
     create_android_project(tester)
@@ -146,13 +156,9 @@ env = Environment(tools=['android'], variables=var)\n''' % (rootdir))
         """
         Test that a simple compile works, produces apk file
         """
-        cwd = os.path.normpath(os.getcwd())
-        rootdir = os.path.normpath(os.path.join(cwd, '..'))
+        create_variant_build(self)
         create_android_project(self)
-        self.write_file('SConstruct','''
-from SCons import Tool
-Tool.DefaultToolpath.append('%s')
-SConscript('main.scons', variant_dir='build', duplicate=0)\n''' % (rootdir))
+
         self.write_file('main.scons','''
 var = Variables('variables.cache', ARGUMENTS)
 var.AddVariables(
@@ -169,12 +175,7 @@ env.AndroidApp('Test')
         """
         Test that a compile with NDK works, produces apk file
         """
-        cwd = os.path.normpath(os.getcwd())
-        rootdir = os.path.normpath(os.path.join(cwd, '..'))
-        self.write_file('SConstruct','''
-from SCons import Tool
-Tool.DefaultToolpath.append('%s')
-SConscript('main.scons', variant_dir='build', duplicate=0)\n''' % (rootdir))
+        create_variant_build(self)
 
         create_android_ndk_project(self)
 
@@ -196,6 +197,46 @@ env.Depends(apk, lib)
         # check that a rebuild is a no-op
         out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
         self.assertEquals("scons: `.' is up to date.\n", out[4])
+
+    def testGeneratedRes(self):
+        create_variant_build(self)
+        srcdir = create_android_project(self)
+        self.write_file(srcdir + '/MyActivity.java',
+                          '''
+                          package com.example.android;
+                          public class MyActivity {
+                              public void onCreate() {
+                                // make sure this gets used
+                                System.out.println(R.raw.fake);
+                              }
+                          }
+                          ''')
+        self.subdir('sounds')
+        self.write_file('sounds/fake.wav', '''BAM''')
+
+        self.write_file('main.scons','''
+var = Variables('variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+env.Command('res/raw/fake.ogg', 'sounds/fake.wav',
+    [Mkdir('res/raw'), Copy('$TARGET', '$SOURCE')])
+env.AndroidApp('Test', resources=['res','#res'])
+''')
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, rc)
+        self.assertTrue(self.exists('Test-debug.apk'))
+        self.assertTrue(self.apk_contains('Test-debug.apk', 'res/drawable/icon.png'))
+        self.assertTrue(self.apk_contains('Test-debug.apk', 'res/raw/fake.ogg'))
+        # check rebuild is a no-op
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals("scons: `.' is up to date.\n", out[4])
+        # check that adding a resource is a rebuild
+        self.write_file('sounds/fake.wav', '''BAR''')
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals('Copy("build/res/raw/fake.ogg", "sounds/fake.wav")\n', out[5])
+
 
 if __name__ == '__main__':
     sconstester.unittest.main()

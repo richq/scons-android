@@ -92,7 +92,6 @@ SCons.Tool.javac.emit_java_classes = emit_java_classes
 
 def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
               source='src', resources='#/res',
-              resources_depfile=None,
               native_folder=None):
     android_manifest = env.File(manifest)
 
@@ -107,17 +106,18 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     gen = env.Dir('gen')
 
     # generate R.java
-    r = env.Aapt(rfile, env.Dir(resources),
+    resource_dirs = [env.Dir(r) for r in env.Flatten([resources])]
+    RES = [r.abspath for r in resource_dirs]
+    res_string = ''
+    aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -J $GEN'
+    for r in range(0, len(RES)):
+        res_string += ' -S ${RES[%d]}'%r
+    aapt_args += res_string
+    r = env.Aapt(rfile, resource_dirs,
              MANIFEST=android_manifest.path,
-             GEN=gen, RES=env.Dir(resources).abspath,
-             AAPT_ARGS='''package -f -m
-             -M $MANIFEST
-             -S $RES
-             -I $ANDROID_JAR
-             -J $GEN'''.split())
+             GEN=gen, RES=RES,
+             AAPT_ARGS=aapt_args.split())
     env.Depends(r, android_manifest)
-    if resources_depfile:
-        env.Depends(r, resources_depfile)
 
     # compile java to classes
     bin_classes = name.replace('-','_')+'_bin/classes'
@@ -132,17 +132,13 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
 
     # resources
-    ap = env.Aapt(name + '.ap_', [env.Dir(resources)],
+    aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -F $TARGET '
+    aapt_args += res_string
+    ap = env.Aapt(name + '.ap_', resource_dirs,
                   MANIFEST=android_manifest.path,
-                  RES=env.Dir(resources).abspath,
-              AAPT_ARGS='''package -f -m
-             -M $MANIFEST
-             -S $RES
-             -I $ANDROID_JAR
-             -F $TARGET'''.split())
+                  RES=RES,
+                  AAPT_ARGS=aapt_args.split())
     env.Depends(ap, android_manifest)
-    if resources_depfile:
-        env.Depends(ap, resources_depfile)
 
     # package java -classpath jarutils.jar:androidprefs.jar:apkbuilder.jar com.android.apkbuilder.ApkBuilder
     # >> name-debug-unaligned.apk

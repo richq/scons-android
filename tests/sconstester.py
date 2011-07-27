@@ -78,4 +78,3 @@ class SConsTestCase(unittest.TestCase):
 
     def done(self):
         shutil.rmtree(self.basedir)
-        #print self.basedir
