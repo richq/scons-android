@@ -93,7 +93,7 @@ SCons.Tool.javac.emit_java_classes = emit_java_classes
 def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
               source='src', resources='#/res',
               resources_depfile=None,
-              native_folder='libs'):
+              native_folder=None):
     android_manifest = env.File(manifest)
 
     if not env.has_key('ANDROID_TARGET'):
@@ -154,17 +154,17 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
         finalname = name + '.apk'
     else:
         UNSIGNED = ''
-    unaligned = env.ApkBuilder(outname, env.Dir(native_folder),
-                   NATIVE_FOLDER=env.Dir(native_folder).path,
+    apk_args = "$UNSIGNED -f $SOURCE -z $AP"
+    nf = None
+    if native_folder:
+        apk_args += '-nf $NATIVE_FOLDER'
+        nf = env.Dir(native_folder).path
+
+    unaligned = env.ApkBuilder(outname, dex,
+                   NATIVE_FOLDER=nf,
                    UNSIGNED=UNSIGNED,
-                   DEX=dex,
                    AP=ap,
-                   APK_ARGS='''
-                   $UNSIGNED
-                   -f $DEX
-                   -z $AP
-                   -nf $NATIVE_FOLDER
-                  '''.split())
+                   APK_ARGS=apk_args.split())
     env.Depends(unaligned, [dex, ap])
     env.Depends(unaligned, env.subst('$APK_BUILDER_JAR').split())
     if env['ANDROID_KEY_STORE'] and env['ANDROID_KEY_NAME']:
