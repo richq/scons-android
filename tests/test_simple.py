@@ -143,13 +143,11 @@ class AndroidSconsTest(sconstester.SConsTestCase):
         rootdir = os.path.normpath(os.path.join(cwd, '..'))
         self.write_file('SConstruct','''
 from SCons import Tool
-var = Variables('variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
+var = Variables(None, ARGUMENTS)
+var.AddVariables(('ANDROID_SDK', 'Android SDK path'))
 Tool.DefaultToolpath.append('%s')
 env = Environment(tools=['android'], variables=var)\n''' % (rootdir))
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
         self.assertEquals(0, rc)
 
     def testBasicBuildDir(self):
@@ -160,14 +158,12 @@ env = Environment(tools=['android'], variables=var)\n''' % (rootdir))
         create_android_project(self)
 
         self.write_file('main.scons','''
-var = Variables('variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
+var = Variables(None, ARGUMENTS)
+var.AddVariables(('ANDROID_SDK', 'Android SDK path'))
 env = Environment(tools=['android'], variables=var)
 env.AndroidApp('Test')
 ''')
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
         self.assertEquals(0, rc)
         self.assertTrue(self.exists('Test-debug.apk'))
 
@@ -180,14 +176,16 @@ env.AndroidApp('Test')
         create_android_ndk_project(self)
 
         self.write_file('main.scons','''
-var = Variables('variables.cache', ARGUMENTS)
+var = Variables('../variables.cache', ARGUMENTS)
 var.AddVariables(
     ('ANDROID_NDK', 'Android NDK path'),
     ('ANDROID_SDK', 'Android SDK path'))
 env = Environment(tools=['android'], variables=var)
-lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c'], app_root='#.')
+var.Save('variables.cache', env)
+lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
 env.Depends(apk, lib)
+env.Help(var.GenerateHelpText(env))
 ''')
         out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
         self.assertEquals(0, rc)
@@ -195,7 +193,7 @@ env.Depends(apk, lib)
         self.assertTrue(self.exists('libs/armeabi/libtest.so', variant=''))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/armeabi/libtest.so'))
         # check that a rebuild is a no-op
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        out, err, rc = self.run_scons()
         self.assertEquals("scons: `.' is up to date.\n", out[4])
 
     def testGeneratedRes(self):
@@ -215,26 +213,26 @@ env.Depends(apk, lib)
         self.write_file('sounds/fake.wav', '''BAM''')
 
         self.write_file('main.scons','''
-var = Variables('variables.cache', ARGUMENTS)
+var = Variables('../variables.cache', ARGUMENTS)
 var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
     ('ANDROID_SDK', 'Android SDK path'))
 env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
 env.Command('res/raw/fake.ogg', 'sounds/fake.wav',
     [Mkdir('res/raw'), Copy('$TARGET', '$SOURCE')])
 env.AndroidApp('Test', resources=['res','#res'])
 ''')
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
         self.assertEquals(0, rc)
         self.assertTrue(self.exists('Test-debug.apk'))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'res/drawable/icon.png'))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'res/raw/fake.ogg'))
         # check rebuild is a no-op
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        out, err, rc = self.run_scons()
         self.assertEquals("scons: `.' is up to date.\n", out[4])
         # check that adding a resource is a rebuild
         self.write_file('sounds/fake.wav', '''BAR''')
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        out, err, rc = self.run_scons()
         self.assertEquals('Copy("build/res/raw/fake.ogg", "sounds/fake.wav")\n', out[5])
 
 

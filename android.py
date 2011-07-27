@@ -37,9 +37,10 @@ def GetAndroidTarget(env, fname):
         targetSdk = TargetFromProperties(dp)
     return (minSdk, targetSdk or minSdk)
 
-def NdkBuild(env, library=None, inputs=[], app_root='.',
+def NdkBuild(env, library=None, inputs=[], app_root='#.',
              manifest='#/AndroidManifest.xml',
             build_dir='.'):
+    ndk_path = GetVariable(env, 'ANDROID_NDK')
     android_manifest = env.File(manifest)
     verbose = 0 if env.GetOption('silent') else 1
     lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
@@ -206,7 +207,6 @@ def GetVariable(env, variable, exit=True):
     return None
 
 def generate(env, **kw):
-    ndk_path = GetVariable(env, 'ANDROID_NDK')
     sdk_path = GetVariable(env, 'ANDROID_SDK')
 
     if 'ANDROID_KEY_STORE' not in env:
