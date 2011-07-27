@@ -3,6 +3,7 @@
 from subprocess import Popen, PIPE
 import errno
 import os
+import zipfile
 import shutil
 import tempfile
 import unittest
@@ -37,6 +38,17 @@ class SConsTestCase(unittest.TestCase):
         except OSError, exc:
             if exc.errno != errno.EEXIST:
                 raise
+
+    def apk_contains(self, apk, filename, variant='build'):
+        apk_final = os.path.join(self.basedir, variant, apk)
+        if zipfile.is_zipfile(apk_final):
+            try:
+                zf = zipfile.ZipFile(apk_final)
+                files = zf.namelist()
+                return filename in files
+            finally:
+                zf.close()
+        return False
 
     def exists(self, name, variant='build'):
         filename = os.path.join(self.basedir, variant, name)

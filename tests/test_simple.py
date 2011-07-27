@@ -109,7 +109,19 @@ def create_android_project(tester):
 </manifest>
                       ''')
 
-
+def create_android_ndk_project(tester):
+    create_android_project(tester)
+    tester.subdir('jni')
+    tester.write_file('jni/test.c',
+                      '''#include <android/log.h>
+                      int not_really_jni(void) { return 1; }''')
+    tester.write_file('jni/Android.mk',
+                      '''
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := test.c
+LOCAL_MODULE := test
+include $(BUILD_SHARED_LIBRARY)''')
 
 class AndroidSconsTest(sconstester.SConsTestCase):
 
@@ -152,6 +164,38 @@ env.AndroidApp('Test')
         out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
         self.assertEquals(0, rc)
         self.assertTrue(self.exists('Test-debug.apk'))
+
+    def testBasicNdkBuild(self):
+        """
+        Test that a compile with NDK works, produces apk file
+        """
+        cwd = os.path.normpath(os.getcwd())
+        rootdir = os.path.normpath(os.path.join(cwd, '..'))
+        self.write_file('SConstruct','''
+from SCons import Tool
+Tool.DefaultToolpath.append('%s')
+SConscript('main.scons', variant_dir='build', duplicate=0)\n''' % (rootdir))
+
+        create_android_ndk_project(self)
+
+        self.write_file('main.scons','''
+var = Variables('variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c'], app_root='#.')
+apk = env.AndroidApp('Test', native_folder='#libs')
+env.Depends(apk, lib)
+''')
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, rc)
+        self.assertTrue(self.exists('Test-debug.apk'))
+        self.assertTrue(self.exists('libs/armeabi/libtest.so', variant=''))
+        self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/armeabi/libtest.so'))
+        # check that a rebuild is a no-op
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals("scons: `.' is up to date.\n", out[4])
 
 if __name__ == '__main__':
     sconstester.unittest.main()

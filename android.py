@@ -37,9 +37,9 @@ def GetAndroidTarget(env, fname):
         targetSdk = TargetFromProperties(dp)
     return (minSdk, targetSdk or minSdk)
 
-def NdkBuild(env, library=None, app_root='.',
+def NdkBuild(env, library=None, inputs=[], app_root='.',
              manifest='#/AndroidManifest.xml',
-            build_dir='.', inputs=[]):
+            build_dir='.'):
     android_manifest = env.File(manifest)
     verbose = 0 if env.GetOption('silent') else 1
     lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
@@ -157,7 +157,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     apk_args = "$UNSIGNED -f $SOURCE -z $AP"
     nf = None
     if native_folder:
-        apk_args += '-nf $NATIVE_FOLDER'
+        apk_args += ' -nf $NATIVE_FOLDER'
         nf = env.Dir(native_folder).path
 
     unaligned = env.ApkBuilder(outname, dex,
@@ -165,7 +165,12 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
                    UNSIGNED=UNSIGNED,
                    AP=ap,
                    APK_ARGS=apk_args.split())
-    env.Depends(unaligned, [dex, ap])
+    if native_folder:
+        sofiles = env.Glob(native_folder + '/armeabi/*.so')
+        sofiles.extend(env.Glob(native_folder + '/armeabi-v7a/*.so'))
+        env.Depends(unaligned, env.Flatten([dex, ap, sofiles]))
+    else:
+        env.Depends(unaligned, [dex, ap])
     env.Depends(unaligned, env.subst('$APK_BUILDER_JAR').split())
     if env['ANDROID_KEY_STORE'] and env['ANDROID_KEY_NAME']:
         # jarsigner -keystore $ANDROID_KEY_STORE -signedjar $TARGET $SOURCE $ANDROID_KEY_NAME
