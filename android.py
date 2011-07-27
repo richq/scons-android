@@ -233,8 +233,9 @@ def generate(env, **kw):
                               for jar in 'androidprefs.jar sdklib.jar'.split())
 
     env['APK_BUILDER_CP'] = cpfiles
+    base = os.path.join(os.path.dirname(__file__))
     j = env.Java(target='toolclasses',
-             source=['site_scons/site_tools/android/sdklib/ApkBuilderMain.java'],
+             source=[base + '/sdklib/ApkBuilderMain.java'],
              JAVACLASSPATH='$APK_BUILDER_CP',
              JAVASOURCEPATH=env.Dir('#site_scons/site_tools').path)
     env['APK_BUILDER_JAR'] = j
