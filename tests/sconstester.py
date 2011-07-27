@@ -54,7 +54,6 @@ class SConsTestCase(unittest.TestCase):
             cmd = ['scons']
             if args:
                 cmd.extend(args)
-            print cmd
             prog = Popen(cmd, shell=False, stdout=PIPE, stderr=PIPE)
             out = prog.stdout.readlines()
             err = prog.stderr.readlines()
