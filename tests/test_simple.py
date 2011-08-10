@@ -121,12 +121,15 @@ def create_android_project(tester):
                       ''')
     return srcdir
 
-def create_android_ndk_project(tester):
+def create_new_android_ndk_project(tester):
     create_android_project(tester)
     tester.subdir('jni')
     tester.write_file('jni/test.c',
                       '''#include <android/log.h>
                       int not_really_jni(void) { return 1; }''')
+
+def create_android_ndk_project(tester):
+    create_new_android_ndk_project(tester)
     tester.write_file('jni/Android.mk',
                       '''
 LOCAL_PATH := $(call my-dir)
@@ -264,6 +267,42 @@ env.Help(var.GenerateHelpText(env))
         oldsize = len(self.get_file('libs/armeabi/libtest.so', variant='').read())
         newsize = len(self.get_file('new/libtest.so').read())
         self.assertTrue(oldsize >= newsize, '%d >= %d failed' % (oldsize, newsize))
+
+    def testCplusplusNdkBuild(self):
+        """
+        Test that a compile with the new NDK build works,
+        and is comparable with the legacy Android.mk system
+        """
+        create_variant_build(self)
+        create_new_android_ndk_project(self)
+        self.write_file('jni/test.cpp',
+                        '''#include <android/log.h>
+                        class Foo {public: int i;};
+                        int do_foo(const Foo &f) {return f.i;}''')
+
+        self.write_file('main.scons','''
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.cpp'])
+apk = env.AndroidApp('Test', native_folder='libs')
+''')
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, rc)
+        self.assertTrue(self.exists('Test-debug.apk'))
+        self.assertTrue(self.exists('libs/armeabi/libtest.so'))
+        # check the CXX command line has -fno-rtti, -mthumb at least
+        compile_line = ''
+        for line in out:
+            if line.startswith('arm-linux-androideabi-g++'):
+                compile_line = line.strip()
+                break
+        self.assertNotEquals('', compile_line)
+        self.assertTrue('-fno-rtti' in compile_line, 'compile line "%s"' % compile_line)
+        self.assertTrue('-fno-exceptions' in compile_line, 'compile line "%s"' % compile_line)
+        self.assertTrue('-mthumb' in compile_line, 'compile line "%s"' % compile_line)
 
 if __name__ == '__main__':
     sconstester.unittest.main()

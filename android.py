@@ -67,12 +67,16 @@ def NdkBuild(env, library=None, inputs=[]):
     -funwind-tables -fstack-protector -fno-short-enums -Wno-psabi
     -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer
     -fno-strict-aliasing -finline-limit=64 -DANDROID -Wa,--noexecstack'''.split()
+    android_cxxflags = '''-fno-rtti -fno-exceptions'''.split()
     env['CFLAGS'] = ['$CFLAGS', android_cflags]
+    env['CXXFLAGS'] = ['$CXXFLAGS', android_cflags, android_cxxflags]
 
     env['LIBPATH'] = ['$LIBPATH', target_platform + '/arch-arm/usr/lib']
-    env['SHLINKFLAGS'] = '''-nostdlib -Wl,-soname,$TARGET -Wl,-shared,-Bsymbolic
-        -Wl,--whole-archive  -Wl,--no-whole-archive
-        -Wl,--no-undefined -Wl,-z,noexecstack'''.split()
+    shflags = '''-Wl,-soname,${TARGET.file}
+        -shared
+        --sysroot=%s/arch-arm
+        -Wl,--no-undefined -Wl,-z,noexecstack''' % (target_platform)
+    env['SHLINKFLAGS'] = shflags.split()
 
     lib = env.SharedLibrary('local/'+library, inputs, LIBS=['$LIBS', 'c'])
     env.Command(library, lib, [Copy('$TARGET', "$SOURCE"), '$STRIP --strip-unneeded $TARGET'])
