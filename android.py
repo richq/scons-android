@@ -60,21 +60,21 @@ def NdkBuild(env, library=None, inputs=[]):
     ndk_path = GetVariable(env, 'ANDROID_NDK')
     AddGnuTools(env)
     target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
-    env['CPPPATH'] = target_platform + '/arch-arm/usr/include'
+    env['CPPPATH'] = ['$CPPPATH', target_platform + '/arch-arm/usr/include']
     env['CPPDEFINES'] = ['$CPPDEFINES', '-DANDROID']
 
     android_cflags = '''-Wall -Wextra -fpic -mthumb-interwork -ffunction-sections
     -funwind-tables -fstack-protector -fno-short-enums -Wno-psabi
     -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer
     -fno-strict-aliasing -finline-limit=64 -DANDROID -Wa,--noexecstack'''.split()
-    env['CFLAGS'] = android_cflags
+    env['CFLAGS'] = ['$CFLAGS', android_cflags]
 
-    env['LIBPATH'] = target_platform + '/arch-arm/usr/lib'
+    env['LIBPATH'] = ['$LIBPATH', target_platform + '/arch-arm/usr/lib']
     env['SHLINKFLAGS'] = '''-nostdlib -Wl,-soname,$TARGET -Wl,-shared,-Bsymbolic
         -Wl,--whole-archive  -Wl,--no-whole-archive
         -Wl,--no-undefined -Wl,-z,noexecstack'''.split()
 
-    lib = env.SharedLibrary(target='local/'+library, source=inputs, LIBS=['$LIBS', 'c'])
+    lib = env.SharedLibrary('local/'+library, inputs, LIBS=['$LIBS', 'c'])
     env.Command(library, lib, [Copy('$TARGET', "$SOURCE"), '$STRIP --strip-unneeded $TARGET'])
     return lib
 
