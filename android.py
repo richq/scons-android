@@ -43,35 +43,35 @@ def AddGnuTools(env):
     gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas']
     for tool in gnu_tools:
         env.Tool(tool)
-    ARM_PREFIX = 'arm-linux-androideabi-'
     toolchain = 'toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin'
-    env.PrependENVPath('PATH', os.path.join(env['ANDROID_NDK'], toolchain))
-    env['CC'] = ARM_PREFIX+'gcc'
+    ARM_PREFIX = os.path.join('$ANDROID_NDK', toolchain, 'arm-linux-androideabi-')
+    env['CC'] =  ARM_PREFIX+'gcc'
     env['CXX'] = ARM_PREFIX+'g++'
     env['AS'] = ARM_PREFIX+'as'
     env['AR'] = ARM_PREFIX+'ar'
     env['RANLIB'] = ARM_PREFIX+'ranlib'
     env['OBJCOPY'] = ARM_PREFIX+'objcopy'
     env['STRIP'] = ARM_PREFIX+'strip'
-    #env['SHLIBPREFIX'] = 'lib'
-    #env['SHLIBSUFFIX'] = '.so'
 
 def NdkBuild(env, library=None, inputs=[]):
     ndk_path = GetVariable(env, 'ANDROID_NDK')
-    AddGnuTools(env)
     target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
     env['CPPPATH'] = ['$CPPPATH', target_platform + '/arch-arm/usr/include']
-    env['CPPDEFINES'] = ['$CPPDEFINES', '-DANDROID']
+    if 'CPPDEFINES' not in env:
+        env['CPPDEFINES'] = []
+    env['CPPDEFINES'] += ['-DANDROID']
 
     android_cflags = '''-Wall -Wextra -fpic -mthumb-interwork -ffunction-sections
     -funwind-tables -fstack-protector -fno-short-enums -Wno-psabi
     -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer
-    -fno-strict-aliasing -finline-limit=64 -DANDROID -Wa,--noexecstack'''.split()
+    -fno-strict-aliasing -finline-limit=64 -Wa,--noexecstack'''.split()
     android_cxxflags = '''-fno-rtti -fno-exceptions'''.split()
     env['CFLAGS'] = ['$CFLAGS', android_cflags]
     env['CXXFLAGS'] = ['$CXXFLAGS', android_cflags, android_cxxflags]
 
-    env['LIBPATH'] = ['$LIBPATH', target_platform + '/arch-arm/usr/lib']
+    if 'LIBPATH' not in env:
+        env['LIBPATH'] = []
+    env['LIBPATH'] += [target_platform + '/arch-arm/usr/lib']
     shflags = '''-Wl,-soname,${TARGET.file}
         -shared
         --sysroot=%s/arch-arm
@@ -262,6 +262,7 @@ def generate(env, **kw):
 
     env.Tool('javac')
     env.Tool('jar')
+    AddGnuTools(env)
     env['AAPT'] = '$ANDROID_SDK/platform-tools/aapt'
     env['DX'] = '$ANDROID_SDK/platform-tools/dx'
     env['ZIPALIGN'] = '$ANDROID_SDK/tools/zipalign'

@@ -296,7 +296,8 @@ apk = env.AndroidApp('Test', native_folder='libs')
         # check the CXX command line has -fno-rtti, -mthumb at least
         compile_line = ''
         for line in out:
-            if line.startswith('arm-linux-androideabi-g++'):
+            comps = line.split()
+            if len(comps) and comps[0].endswith('arm-linux-androideabi-g++'):
                 compile_line = line.strip()
                 break
         self.assertNotEquals('', compile_line)
