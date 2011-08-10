@@ -78,4 +78,7 @@ class SConsTestCase(unittest.TestCase):
             os.chdir(start)
 
     def done(self):
-        shutil.rmtree(self.basedir)
+        if 'SCONSTESTER_NOREMOVE' in os.environ:
+            print self.basedir
+        else:
+            shutil.rmtree(self.basedir)
