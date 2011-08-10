@@ -3,7 +3,7 @@
 
 import os
 from SCons.Builder import Builder
-from SCons.Defaults import DirScanner
+from SCons.Defaults import DirScanner, Mkdir, Copy
 from xml.dom import minidom
 
 def GetAndroidPackage(env, fname):
@@ -39,7 +39,46 @@ def GetAndroidTarget(env, fname):
         targetSdk = TargetFromProperties(dp)
     return (minSdk, targetSdk or minSdk)
 
-def NdkBuild(env, library=None, inputs=[], app_root='#.',
+def AddGnuTools(env):
+    gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas']
+    for tool in gnu_tools:
+        env.Tool(tool)
+    ARM_PREFIX = 'arm-linux-androideabi-'
+    toolchain = 'toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin'
+    env.PrependENVPath('PATH', os.path.join(env['ANDROID_NDK'], toolchain))
+    env['CC'] = ARM_PREFIX+'gcc'
+    env['CXX'] = ARM_PREFIX+'g++'
+    env['AS'] = ARM_PREFIX+'as'
+    env['AR'] = ARM_PREFIX+'ar'
+    env['RANLIB'] = ARM_PREFIX+'ranlib'
+    env['OBJCOPY'] = ARM_PREFIX+'objcopy'
+    env['STRIP'] = ARM_PREFIX+'strip'
+    #env['SHLIBPREFIX'] = 'lib'
+    #env['SHLIBSUFFIX'] = '.so'
+
+def NdkBuild(env, library=None, inputs=[]):
+    ndk_path = GetVariable(env, 'ANDROID_NDK')
+    AddGnuTools(env)
+    target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
+    env['CPPPATH'] = target_platform + '/arch-arm/usr/include'
+    env['CPPDEFINES'] = ['$CPPDEFINES', '-DANDROID']
+
+    android_cflags = '''-Wall -Wextra -fpic -mthumb-interwork -ffunction-sections
+    -funwind-tables -fstack-protector -fno-short-enums -Wno-psabi
+    -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer
+    -fno-strict-aliasing -finline-limit=64 -DANDROID -Wa,--noexecstack'''.split()
+    env['CFLAGS'] = android_cflags
+
+    env['LIBPATH'] = target_platform + '/arch-arm/usr/lib'
+    env['SHLINKFLAGS'] = '''-nostdlib -Wl,-soname,$TARGET -Wl,-shared,-Bsymbolic
+        -Wl,--whole-archive  -Wl,--no-whole-archive
+        -Wl,--no-undefined -Wl,-z,noexecstack'''.split()
+
+    lib = env.SharedLibrary(target='local/'+library, source=inputs, LIBS=['$LIBS', 'c'])
+    env.Command(library, lib, [Copy('$TARGET', "$SOURCE"), '$STRIP --strip-unneeded $TARGET'])
+    return lib
+
+def NdkBuildLegacy(env, library=None, inputs=[], app_root='#.',
              manifest='#/AndroidManifest.xml',
             build_dir='.'):
     ndk_path = GetVariable(env, 'ANDROID_NDK')
@@ -257,6 +296,7 @@ def generate(env, **kw):
 
     env.AddMethod(AndroidApp)
     env.AddMethod(NdkBuild)
+    env.AddMethod(NdkBuildLegacy)
     env.AddMethod(GetAndroidTarget)
     env.AddMethod(GetAndroidPackage)
     env.AddMethod(GetAndroidName)

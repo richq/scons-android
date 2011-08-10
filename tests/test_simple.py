@@ -184,7 +184,7 @@ var.AddVariables(
     ('ANDROID_SDK', 'Android SDK path'))
 env = Environment(tools=['android'], variables=var)
 var.Save('variables.cache', env)
-lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c'])
+lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
 env.Depends(apk, lib)
 env.Help(var.GenerateHelpText(env))
@@ -237,6 +237,35 @@ env.AndroidApp('Test', resources=['res','#res'])
         out, err, rc = self.run_scons()
         self.assertEquals('Copy("build/res/raw/fake.ogg", "sounds/fake.wav")\n', out[5])
 
+    def testNewNdkBuild(self):
+        """
+        Test that a compile with the new NDK build works,
+        and is comparable with the legacy Android.mk system
+        """
+        create_variant_build(self)
+        create_android_ndk_project(self)
+
+        self.write_file('main.scons','''
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
+lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
+env.NdkBuild('new/libtest.so', ['jni/test.c'])
+apk = env.AndroidApp('Test', native_folder='#libs')
+env.Depends(apk, lib)
+env.Help(var.GenerateHelpText(env))
+''')
+        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, rc)
+        self.assertTrue(self.exists('Test-debug.apk'))
+        self.assertTrue(self.exists('libs/armeabi/libtest.so', variant=''))
+        self.assertTrue(self.exists('new/libtest.so'))
+        oldsize = len(self.get_file('libs/armeabi/libtest.so', variant='').read())
+        newsize = len(self.get_file('new/libtest.so').read())
+        self.assertTrue(oldsize >= newsize, '%d >= %d failed' % (oldsize, newsize))
 
 if __name__ == '__main__':
     sconstester.unittest.main()
