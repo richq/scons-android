@@ -221,8 +221,9 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     # zipalign -f 4 unaligned aligned
     app = env.ZipAlign(finalname, unaligned)
     # installation marker
+    adb = os.path.join('$ANDROID_SDK','platform-tools/adb')
     adb_install = env.Command(name + '-installed', app,
-        ['adb install -r $SOURCE && date > $TARGET'])
+        [adb + ' install -r $SOURCE && date > $TARGET'])
     # do not run by default
     env.Ignore(adb_install[0].dir, adb_install)
     env.Alias('install', adb_install)
@@ -232,7 +233,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     else:
         activity = env['APP_ACTIVITY']
     run = env.Command(name + '-run', app,
-      ['adb shell am start -a android.intent.action.MAIN -n %s/%s%s'%(
+      [adb + ' shell am start -a android.intent.action.MAIN -n %s/%s%s'%(
           package, package, activity)])
     env.Depends(run, adb_install)
     env.Ignore(run[0].dir, run)
