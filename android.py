@@ -6,7 +6,7 @@ from SCons.Builder import Builder
 from SCons.Defaults import DirScanner, Copy
 from xml.dom import minidom
 
-def GetAndroidPackage(env, fname):
+def get_android_package(fname):
     p = minidom.parse(open(fname))
     m = p.getElementsByTagName('manifest')[0]
     return m.getAttribute('package')
@@ -14,7 +14,7 @@ def GetAndroidPackage(env, fname):
 def get_rfile(package):
     return os.path.join(package.replace('.', '/'), 'R.java')
 
-def TargetFromProperties(fname):
+def target_from_properties(fname):
     for line in open(fname).readlines():
         line = line.strip()
         if line.startswith('#') or not line:
@@ -24,22 +24,22 @@ def TargetFromProperties(fname):
             return val.split('-')[1]
     return None
 
-def GetAndroidName(env, fname):
+def get_android_name(fname):
     p = minidom.parse(open(fname))
     m = p.getElementsByTagName('activity')[0]
     return m.getAttribute('android:name')
 
-def GetAndroidTarget(env, fname):
+def get_android_target(fname):
     dp = os.path.join(os.path.dirname(fname), 'default.properties')
     p = minidom.parse(open(fname))
     m = p.getElementsByTagName('uses-sdk')[0]
     minSdk = m.getAttribute('android:minSdkVersion')
     targetSdk = m.getAttribute('android:targetSdkVersion')
     if os.path.exists(dp):
-        targetSdk = TargetFromProperties(dp)
+        targetSdk = target_from_properties(dp)
     return (minSdk, targetSdk or minSdk)
 
-def AddGnuTools(env):
+def add_gnu_tools(env):
     gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas']
     for tool in gnu_tools:
         env.Tool(tool)
@@ -142,10 +142,10 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     android_manifest = env.File(manifest)
 
     if not env.has_key('ANDROID_TARGET'):
-        env['ANDROID_MIN_TARGET'], env['ANDROID_TARGET'] = env.GetAndroidTarget(android_manifest.abspath)
+        env['ANDROID_MIN_TARGET'], env['ANDROID_TARGET'] = get_android_target(android_manifest.abspath)
     env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK','platforms/android-$ANDROID_TARGET/android.jar')
     if not env.has_key('APP_PACKAGE'):
-        package = env.GetAndroidPackage(android_manifest.abspath)
+        package = get_android_package(android_manifest.abspath)
     else:
         package = env['APP_PACKAGE']
     rfile = os.path.join('gen', get_rfile(package))
@@ -229,7 +229,7 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     env.Alias('install', adb_install)
 
     if not env.has_key('APP_ACTIVITY'):
-        activity = env.GetAndroidName(android_manifest.abspath)
+        activity = get_android_name(android_manifest.abspath)
     else:
         activity = env['APP_ACTIVITY']
     run = env.Command(name + '-run', app,
@@ -264,7 +264,7 @@ def generate(env, **kw):
 
     env.Tool('javac')
     env.Tool('jar')
-    AddGnuTools(env)
+    add_gnu_tools(env)
     env['AAPT'] = '$ANDROID_SDK/platform-tools/aapt'
     env['DX'] = '$ANDROID_SDK/platform-tools/dx'
     env['ZIPALIGN'] = '$ANDROID_SDK/tools/zipalign'
@@ -304,9 +304,6 @@ def generate(env, **kw):
     env.AddMethod(AndroidApp)
     env.AddMethod(NdkBuild)
     env.AddMethod(NdkBuildLegacy)
-    env.AddMethod(GetAndroidTarget)
-    env.AddMethod(GetAndroidPackage)
-    env.AddMethod(GetAndroidName)
 
 def exists(env):
     return 1
