@@ -63,7 +63,6 @@ class SConsTestCase(unittest.TestCase):
         start = os.getcwd()
         try:
             os.chdir(self.basedir)
-            cwd = os.getcwd()
             cmd = ['scons']
             if args:
                 cmd.extend(args)

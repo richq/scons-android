@@ -3,7 +3,7 @@
 
 import os
 from SCons.Builder import Builder
-from SCons.Defaults import DirScanner, Mkdir, Copy
+from SCons.Defaults import DirScanner, Copy
 from xml.dom import minidom
 
 def GetAndroidPackage(env, fname):
@@ -54,7 +54,8 @@ def AddGnuTools(env):
     env['STRIP'] = ARM_PREFIX+'strip'
 
 def NdkBuild(env, library=None, inputs=[]):
-    ndk_path = GetVariable(env, 'ANDROID_NDK')
+    # ensure ANDROID_NDK is set
+    GetVariable(env, 'ANDROID_NDK')
     target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
     env['CPPPATH'] = ['$CPPPATH', target_platform + '/arch-arm/usr/include']
     if 'CPPDEFINES' not in env:
@@ -83,10 +84,9 @@ def NdkBuild(env, library=None, inputs=[]):
     return lib
 
 def NdkBuildLegacy(env, library=None, inputs=[], app_root='#.',
-             manifest='#/AndroidManifest.xml',
             build_dir='.'):
-    ndk_path = GetVariable(env, 'ANDROID_NDK')
-    android_manifest = env.File(manifest)
+    # ensure ANDROID_NDK is set
+    GetVariable(env, 'ANDROID_NDK')
     verbose = 0 if env.GetOption('silent') else 1
     lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
                   '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-$ANDROID_MIN_TARGET -C %s' % (
@@ -253,7 +253,8 @@ def GetVariable(env, variable, exit=True):
     return None
 
 def generate(env, **kw):
-    sdk_path = GetVariable(env, 'ANDROID_SDK')
+    # ensure ANDROID_SDK is set
+    GetVariable(env, 'ANDROID_SDK')
 
     if 'ANDROID_KEY_STORE' not in env:
         env['ANDROID_KEY_STORE'] = ''

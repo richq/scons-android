@@ -3,7 +3,9 @@
 
 import sconstester
 import os
+import sys
 import base64
+import StringIO
 
 # print base64.encodestring(open("filename").read())
 # using stock android icon
@@ -154,6 +156,27 @@ Tool.DefaultToolpath.append('%s')
 env = Environment(tools=['android'], variables=var)\n''' % (rootdir))
         out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
         self.assertEquals(0, rc)
+
+    def testErrorWhenNoAndroidVariables(self):
+        """
+        Test that not setting android variables causes an error
+        """
+        cwd = os.path.normpath(os.getcwd())
+        rootdir = os.path.normpath(os.path.join(cwd, '..'))
+        self.write_file('SConstruct','''
+from SCons import Tool
+Tool.DefaultToolpath.append('%s')
+env = Environment(tools=['android'])\n''' % (rootdir))
+        # hide error message as failure is expected
+        old_stdout = sys.stdout
+        sys.stdout = StringIO.StringIO()
+        try:
+            out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
+            self.assertEquals(1, rc)
+            self.assertEquals(out[1], ('Please set ANDROID_SDK. '
+                                       'export ANDROID_SDK=path\n'))
+        finally:
+            sys.stdout = old_stdout
 
     def testBasicBuildDir(self):
         """
