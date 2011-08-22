@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-# Licensed under the MIT license: http://www.opensource.org/licenses/mit-license.php
+# Licensed under the MIT license:
+# http://www.opensource.org/licenses/mit-license.php
+"""
+SCons Tool to Build Android Applications
+"""
 
 import os
 from SCons.Builder import Builder
@@ -7,14 +11,17 @@ from SCons.Defaults import DirScanner, Copy
 from xml.dom import minidom
 
 def get_android_package(fname):
-    p = minidom.parse(open(fname))
-    m = p.getElementsByTagName('manifest')[0]
-    return m.getAttribute('package')
+    """ Get the value of the package from <manifest package='foo'> """
+    parsed = minidom.parse(open(fname))
+    manifest = parsed.getElementsByTagName('manifest')[0]
+    return manifest.getAttribute('package')
 
 def get_rfile(package):
+    """ Retuns the path to the R.java resource file """
     return os.path.join(package.replace('.', '/'), 'R.java')
 
 def target_from_properties(fname):
+    """ Get a target value from a properties file """
     for line in open(fname).readlines():
         line = line.strip()
         if line.startswith('#') or not line:
@@ -25,47 +32,57 @@ def target_from_properties(fname):
     return None
 
 def get_android_name(fname):
-    p = minidom.parse(open(fname))
-    m = p.getElementsByTagName('activity')[0]
-    return m.getAttribute('android:name')
+    """ Get the android activity name from <activity android:name='foo'> """
+    parsed = minidom.parse(open(fname))
+    activity = parsed.getElementsByTagName('activity')[0]
+    return activity.getAttribute('android:name')
 
 def get_android_target(fname):
-    dp = os.path.join(os.path.dirname(fname), 'default.properties')
-    p = minidom.parse(open(fname))
-    m = p.getElementsByTagName('uses-sdk')[0]
-    minSdk = m.getAttribute('android:minSdkVersion')
-    targetSdk = m.getAttribute('android:targetSdkVersion')
-    if os.path.exists(dp):
-        targetSdk = target_from_properties(dp)
+    """
+    Get the minimum SDK version and the target SDK version.
+    fname is the AndroidManifest.xml file.
+    Checks the manifest and also default.properties (if it exists)
+    """
+    properties = os.path.join(os.path.dirname(fname), 'default.properties')
+    parsed = minidom.parse(open(fname))
+    uses_sdk = parsed.getElementsByTagName('uses-sdk')[0]
+    minSdk = uses_sdk.getAttribute('android:minSdkVersion')
+    targetSdk = uses_sdk.getAttribute('android:targetSdkVersion')
+    if os.path.exists(properties):
+        targetSdk = target_from_properties(properties)
     return (minSdk, targetSdk or minSdk)
 
 def add_gnu_tools(env):
+    """ Add the NDK GNU compiler tools to the Environment """
     gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas']
     for tool in gnu_tools:
         env.Tool(tool)
     toolchain = 'toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin'
-    ARM_PREFIX = os.path.join('$ANDROID_NDK', toolchain, 'arm-linux-androideabi-')
-    env['CC'] =  ARM_PREFIX+'gcc'
-    env['CXX'] = ARM_PREFIX+'g++'
-    env['AS'] = ARM_PREFIX+'as'
-    env['AR'] = ARM_PREFIX+'ar'
-    env['RANLIB'] = ARM_PREFIX+'ranlib'
-    env['OBJCOPY'] = ARM_PREFIX+'objcopy'
-    env['STRIP'] = ARM_PREFIX+'strip'
+    arm_prefix = os.path.join('$ANDROID_NDK', toolchain,
+                              'arm-linux-androideabi-')
+    env['CC'] =  arm_prefix+'gcc'
+    env['CXX'] = arm_prefix+'g++'
+    env['AS'] = arm_prefix+'as'
+    env['AR'] = arm_prefix+'ar'
+    env['RANLIB'] = arm_prefix+'ranlib'
+    env['OBJCOPY'] = arm_prefix+'objcopy'
+    env['STRIP'] = arm_prefix+'strip'
 
-def NdkBuild(env, library=None, inputs=[]):
+def NdkBuild(env, library=None, inputs=None):
+    """ Use the NDK to build a shared library from the given inputs. """
     # ensure ANDROID_NDK is set
-    GetVariable(env, 'ANDROID_NDK')
+    get_variable(env, 'ANDROID_NDK')
     target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
     env['CPPPATH'] = ['$CPPPATH', target_platform + '/arch-arm/usr/include']
     if 'CPPDEFINES' not in env:
         env['CPPDEFINES'] = []
     env['CPPDEFINES'] += ['-DANDROID']
 
-    android_cflags = '''-Wall -Wextra -fpic -mthumb-interwork -ffunction-sections
-    -funwind-tables -fstack-protector -fno-short-enums -Wno-psabi
-    -march=armv5te -mtune=xscale -msoft-float -mthumb -Os -fomit-frame-pointer
-    -fno-strict-aliasing -finline-limit=64 -Wa,--noexecstack'''.split()
+    android_cflags = '''-Wall -Wextra -fpic -mthumb-interwork
+    -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums
+    -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os
+    -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64
+    -Wa,--noexecstack'''.split()
     android_cxxflags = '''-fno-rtti -fno-exceptions'''.split()
     env['CFLAGS'] = ['$CFLAGS', android_cflags]
     env['CXXFLAGS'] = ['$CXXFLAGS', android_cflags, android_cxxflags]
@@ -80,19 +97,23 @@ def NdkBuild(env, library=None, inputs=[]):
     env['SHLINKFLAGS'] = shflags.split()
 
     lib = env.SharedLibrary('local/'+library, inputs, LIBS=['$LIBS', 'c'])
-    env.Command(library, lib, [Copy('$TARGET', "$SOURCE"), '$STRIP --strip-unneeded $TARGET'])
+    env.Command(library, lib, [Copy('$TARGET', "$SOURCE"),
+                               '$STRIP --strip-unneeded $TARGET'])
     return lib
 
-def NdkBuildLegacy(env, library=None, inputs=[], app_root='#.',
+def NdkBuildLegacy(env, library=None, inputs=None, app_root='#.',
             build_dir='.'):
+    """ Use ndk-build to compile native code. """
     # ensure ANDROID_NDK is set
-    GetVariable(env, 'ANDROID_NDK')
+    get_variable(env, 'ANDROID_NDK')
     verbose = 0 if env.GetOption('silent') else 1
-    lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs),
-                  '$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s APP_PLATFORM=android-$ANDROID_MIN_TARGET -C %s' % (
-                      verbose,
-                      env.GetOption('num_jobs'),
-                      env.Dir(build_dir).path, env.Dir(app_root).abspath))
+    jobs = env.GetOption('num_jobs')
+    build_path = env.Dir(build_dir).path
+    app_path = env.Dir(app_root).abspath
+    cmd = ('$ANDROID_NDK/ndk-build V=%s -j %s SCONS_BUILD_ROOT=%s '
+           'APP_PLATFORM=android-$ANDROID_MIN_TARGET -C %s') % (
+               verbose, jobs, build_path, app_path)
+    lib = env.Command(os.path.join(app_root, library), env.Flatten(inputs), cmd)
     env.Clean(lib, [os.path.join(app_root, x) for x in ('libs', 'obj')])
     return lib
 
@@ -101,21 +122,26 @@ def NdkBuildLegacy(env, library=None, inputs=[], app_root='#.',
 import SCons.Tool.javac
 from SCons.Tool.JavaCommon import parse_java_file
 
-default_java_emitter = SCons.Tool.javac.emit_java_classes
+_DEFAULT_JAVA_EMITTER = SCons.Tool.javac.emit_java_classes
 
 def emit_java_classes(target, source, env):
+    """
+    Set correct path for .class files from generated java source files
+    """
     classdir = target[0]
-    tlist, slist = default_java_emitter(target, source, env)
+    tlist, slist = _DEFAULT_JAVA_EMITTER(target, source, env)
     if env.has_key('APP_PACKAGE'):
         out = []
         sourcedir = source[0]
         for s in slist:
             base = s.name.replace('.java', '.class')
             classname = env['APP_PACKAGE'] + s.name.replace('.java', '')
-            jf = sourcedir.File(env['APP_PACKAGE'].replace('.', '/') + '/' + s.name)
+            jf = sourcedir.File(os.path.join(
+                    env['APP_PACKAGE'].replace('.', '/'), s.name))
             if os.path.exists(jf.abspath):
                 version = env.get('JAVAVERSION', '1.4')
-                pkg_dir, classes = parse_java_file(jf.rfile().get_abspath(), version)
+                pkg_dir, classes = parse_java_file(jf.rfile().get_abspath(),
+                                                   version)
                 for c in classes:
                     t = classdir.File(pkg_dir + '/' + str(c) + '.class')
                     t.attributes.java_classdir = classdir
@@ -123,7 +149,8 @@ def emit_java_classes(target, source, env):
                     t.attributes.java_classname = str(c)
                     out.append(t)
             else:
-                t = classdir.File(env['APP_PACKAGE'].replace('.', '/') + '/' + base)
+                t = classdir.File(os.path.join(
+                        env['APP_PACKAGE'].replace('.', '/'), base))
                 t.attributes.java_classdir = classdir
                 t.attributes.java_sourcedir = s.dir
                 t.attributes.java_classname = classname
@@ -136,14 +163,20 @@ def emit_java_classes(target, source, env):
 SCons.Tool.javac.emit_java_classes = emit_java_classes
 
 
-def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
-              source='src', resources='#/res',
-              native_folder=None):
+def AndroidApp(env, name,
+               manifest='#/AndroidManifest.xml',
+               source='src',
+               resources='#/res',
+               native_folder=None):
+    """ Create an Android application from the given inputs. """
     android_manifest = env.File(manifest)
 
     if not env.has_key('ANDROID_TARGET'):
-        env['ANDROID_MIN_TARGET'], env['ANDROID_TARGET'] = get_android_target(android_manifest.abspath)
-    env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK','platforms/android-$ANDROID_TARGET/android.jar')
+        min_target, target = get_android_target(android_manifest.abspath)
+        env['ANDROID_MIN_TARGET'] = min_target
+        env['ANDROID_TARGET'] = target
+    env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK',
+                              'platforms/android-$ANDROID_TARGET/android.jar')
     if not env.has_key('APP_PACKAGE'):
         package = get_android_package(android_manifest.abspath)
     else:
@@ -153,17 +186,17 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
 
     # generate R.java
     resource_dirs = [env.Dir(r) for r in env.Flatten([resources])]
-    RES = [r.abspath for r in resource_dirs]
+    abs_resources = [r.abspath for r in resource_dirs]
     res_string = ''
     aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -J $GEN'
-    for r in range(0, len(RES)):
-        res_string += ' -S ${RES[%d]}'%r
+    for tmp in range(0, len(abs_resources)):
+        res_string += ' -S ${RES[%d]}' % tmp
     aapt_args += res_string
-    r = env.Aapt(rfile, resource_dirs,
+    generated_rfile = env.Aapt(rfile, resource_dirs,
              MANIFEST=android_manifest.path,
-             GEN=gen, RES=RES,
+             GEN=gen, RES=abs_resources,
              AAPT_ARGS=aapt_args.split())
-    env.Depends(r, android_manifest)
+    env.Depends(generated_rfile, android_manifest)
 
     # compile java to classes
     bin_classes = name.replace('-','_')+'_bin/classes'
@@ -180,42 +213,42 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
     # resources
     aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -F $TARGET '
     aapt_args += res_string
-    ap = env.Aapt(name + '.ap_', resource_dirs,
+    tmp_package = env.Aapt(name + '.ap_', resource_dirs,
                   MANIFEST=android_manifest.path,
-                  RES=RES,
+                  RES=abs_resources,
                   AAPT_ARGS=aapt_args.split())
-    env.Depends(ap, android_manifest)
+    env.Depends(tmp_package, android_manifest)
 
-    # package java -classpath jarutils.jar:androidprefs.jar:apkbuilder.jar com.android.apkbuilder.ApkBuilder
+    # package java -classpath jarutils.jar:androidprefs.jar:apkbuilder.jar \
+    #           com.android.apkbuilder.ApkBuilder
     # >> name-debug-unaligned.apk
     outname = name + '-debug-unaligned.apk'
     finalname = name + '-debug.apk'
     if env['ANDROID_KEY_STORE']:
-        UNSIGNED='-u'
+        unsigned_flag = '-u'
         outname = name + '-unsigned.apk'
         finalname = name + '.apk'
     else:
-        UNSIGNED = ''
+        unsigned_flag = ''
     apk_args = "$UNSIGNED -f $SOURCE -z $AP"
-    nf = None
+    native_path = None
     if native_folder:
         apk_args += ' -nf $NATIVE_FOLDER'
-        nf = env.Dir(native_folder).path
+        native_path = env.Dir(native_folder).path
 
     unaligned = env.ApkBuilder(outname, dex,
-                   NATIVE_FOLDER=nf,
-                   UNSIGNED=UNSIGNED,
-                   AP=ap,
+                   NATIVE_FOLDER=native_path,
+                   UNSIGNED=unsigned_flag,
+                   AP=tmp_package,
                    APK_ARGS=apk_args.split())
     if native_folder:
         sofiles = env.Glob(native_folder + '/armeabi/*.so')
         sofiles.extend(env.Glob(native_folder + '/armeabi-v7a/*.so'))
-        env.Depends(unaligned, env.Flatten([dex, ap, sofiles]))
+        env.Depends(unaligned, env.Flatten([dex, tmp_package, sofiles]))
     else:
-        env.Depends(unaligned, [dex, ap])
+        env.Depends(unaligned, [dex, tmp_package])
     env.Depends(unaligned, env.subst('$APK_BUILDER_JAR').split())
     if env['ANDROID_KEY_STORE'] and env['ANDROID_KEY_NAME']:
-        # jarsigner -keystore $ANDROID_KEY_STORE -signedjar $TARGET $SOURCE $ANDROID_KEY_NAME
         unaligned = env.JarSigner(name + '-unaligned.apk', unaligned)
 
     # zipalign -f 4 unaligned aligned
@@ -241,20 +274,25 @@ def AndroidApp(env, name, manifest='#/AndroidManifest.xml',
 
     return app
 
-def GetVariable(env, variable, exit=True):
+def get_variable(env, variable, do_exit=True):
+    """
+    Extract a variable from the environment if it exists.
+    Optionally exits the run
+    """
     if variable in os.environ:
         return os.environ[variable]
     elif variable in env:
         return env[variable]
-    elif exit:
+    elif do_exit:
         print 'Please set %s. export %s=path' % (variable, variable)
         print "or run `scons %s=path'" % variable
         env.Exit(1)
     return None
 
 def generate(env, **kw):
+    """ SCons tool entry point """
     # ensure ANDROID_SDK is set
-    GetVariable(env, 'ANDROID_SDK')
+    get_variable(env, 'ANDROID_SDK')
 
     if 'ANDROID_KEY_STORE' not in env:
         env['ANDROID_KEY_STORE'] = ''
@@ -289,7 +327,9 @@ def generate(env, **kw):
              JAVASOURCEPATH=env.Dir('#site_scons/site_tools').path)
     env['APK_BUILDER_JAR'] = j
 
-    bld = Builder(action='$JAVA -classpath $TOOL_CLASSES_DIR:$APK_BUILDER_CP android.sdklib.ApkBuilderMain $TARGET $APK_ARGS',
+    apk_builder = ('$JAVA -classpath $TOOL_CLASSES_DIR:$APK_BUILDER_CP '
+                   'android.sdklib.ApkBuilderMain $TARGET $APK_ARGS')
+    bld = Builder(action=apk_builder,
                   source_scanner=DirScanner,
                   TOOL_CLASSES_DIR=env.Dir('toolclasses'),
                   suffix='.apk')
@@ -298,12 +338,14 @@ def generate(env, **kw):
     bld = Builder(action='$ZIPALIGN -f 4 $SOURCE $TARGET')
     env.Append(BUILDERS = { 'ZipAlign': bld })
 
-    bld = Builder(action='$JARSIGNER -keystore $ANDROID_KEY_STORE -signedjar $TARGET $SOURCE $ANDROID_KEY_NAME')
-    env.Append(BUILDERS = { 'JarSigner': bld })
+    jarsigner_cmd = ('$JARSIGNER -keystore $ANDROID_KEY_STORE'
+                     ' -signedjar $TARGET $SOURCE $ANDROID_KEY_NAME')
+    env.Append(BUILDERS = { 'JarSigner': Builder(action=jarsigner_cmd) })
 
     env.AddMethod(AndroidApp)
     env.AddMethod(NdkBuild)
     env.AddMethod(NdkBuildLegacy)
 
 def exists(env):
+    """ NOOP method required by SCons """
     return 1
