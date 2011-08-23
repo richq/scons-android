@@ -132,29 +132,29 @@ def emit_java_classes(target, source, env):
     tlist, slist = _DEFAULT_JAVA_EMITTER(target, source, env)
     if env.has_key('APP_PACKAGE'):
         out = []
-        sourcedir = source[0]
-        for s in slist:
-            base = s.name.replace('.java', '.class')
-            classname = env['APP_PACKAGE'] + s.name.replace('.java', '')
-            jf = sourcedir.File(os.path.join(
-                    env['APP_PACKAGE'].replace('.', '/'), s.name))
-            if os.path.exists(jf.abspath):
+        for entry in slist:
+            classname = env['APP_PACKAGE'] + entry.name.replace('.java', '')
+            java_file = source[0].File(os.path.join(
+                    env['APP_PACKAGE'].replace('.', '/'), entry.name))
+            if os.path.exists(java_file.abspath):
                 version = env.get('JAVAVERSION', '1.4')
-                pkg_dir, classes = parse_java_file(jf.rfile().get_abspath(),
-                                                   version)
-                for c in classes:
-                    t = classdir.File(pkg_dir + '/' + str(c) + '.class')
-                    t.attributes.java_classdir = classdir
-                    t.attributes.java_sourcedir = s.dir
-                    t.attributes.java_classname = str(c)
-                    out.append(t)
+                pkg_dir, classes = parse_java_file(
+                                java_file.rfile().get_abspath(), version)
+                for output in classes:
+                    class_file = classdir.File(
+                                os.path.join(pkg_dir, str(output) + '.class'))
+                    class_file.attributes.java_classdir = classdir
+                    class_file.attributes.java_sourcedir = entry.dir
+                    class_file.attributes.java_classname = str(output)
+                    out.append(class_file)
             else:
-                t = classdir.File(os.path.join(
-                        env['APP_PACKAGE'].replace('.', '/'), base))
-                t.attributes.java_classdir = classdir
-                t.attributes.java_sourcedir = s.dir
-                t.attributes.java_classname = classname
-                out.append(t)
+                class_file = classdir.File(os.path.join(
+                        env['APP_PACKAGE'].replace('.', '/'),
+                        entry.name.replace('.java', '.class')))
+                class_file.attributes.java_classdir = classdir
+                class_file.attributes.java_sourcedir = entry.dir
+                class_file.attributes.java_classname = classname
+                out.append(class_file)
         return out, slist
     else:
         return tlist, slist
