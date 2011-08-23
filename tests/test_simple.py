@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-# Licensed under the MIT license: http://www.opensource.org/licenses/mit-license.php
+# Licensed under the MIT license:
+# http://www.opensource.org/licenses/mit-license.php
+"""
+Functional tests for the SCons Android tool
+"""
 
 import sconstester
 import os
@@ -10,7 +14,7 @@ import StringIO
 # print base64.encodestring(open("filename").read())
 # using stock android icon
 
-icon_data = """\
+_ICON_DATA = """\
 iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAJ1UlEQVRoBe1ZW5AUVxn+untmd5iZ
 ZZdd9sIu14VAAJclAbJi0DImIZbltRJCES2txLLUirHUlOVLHqgyLwpqqUmpD0nKkhijFJYxliUv
 kAARIiCbDZcQlh0uy7IX9jb3S3f7/T3Ty8xOT89AyPLiX/XP6T7n9H/++/nPGeD/cHs1oFS4fKXz
@@ -60,18 +64,27 @@ AElFTkSuQmCC
 """
 
 def getNDK():
+    """
+    Get the NDK variable, either the default or from the environment
+    """
     if 'ANDROID_NDK' in os.environ:
         return os.environ['ANDROID_NDK']
     else:
         return os.path.expanduser('~/tools/android-ndk-r6')
 
 def getSDK():
+    """
+    Get the SDK variable, either the default or from the environment
+    """
     if 'ANDROID_SDK' in os.environ:
         return os.environ['ANDROID_SDK']
     else:
         return os.path.expanduser('~/tools/android-sdk-linux_86')
 
 def create_variant_build(tester):
+    """
+    Add variant build boilerplate to a test
+    """
     cwd = os.path.normpath(os.getcwd())
     rootdir = os.path.normpath(os.path.join(cwd, '..'))
     tester.write_file('SConstruct','''
@@ -81,12 +94,15 @@ SConscript('main.scons', variant_dir='build', duplicate=0)\n''' % (rootdir))
 
 
 def create_android_project(tester):
+    """
+    Add an Android project to a test
+    """
     srcdir = 'src/com/example/android'
     tester.subdir('res/drawable')
     tester.subdir('res/layout')
     tester.subdir('res/values')
     tester.subdir(srcdir)
-    tester.write_file('res/drawable/icon.png', base64.decodestring(icon_data))
+    tester.write_file('res/drawable/icon.png', base64.decodestring(_ICON_DATA))
     tester.write_file('res/values/strings.xml',
                       '''<?xml version="1.0" encoding="utf-8"?>
 <resources>
@@ -124,6 +140,9 @@ def create_android_project(tester):
     return srcdir
 
 def create_new_android_ndk_project(tester):
+    """
+    Create a new-style NDK library Android project
+    """
     create_android_project(tester)
     tester.subdir('jni')
     tester.write_file('jni/test.c',
@@ -131,6 +150,9 @@ def create_new_android_ndk_project(tester):
                       int not_really_jni(void) { return 1; }''')
 
 def create_android_ndk_project(tester):
+    """
+    Create a ndk-build NDK library Android project
+    """
     create_new_android_ndk_project(tester)
     tester.write_file('jni/Android.mk',
                       '''
@@ -141,6 +163,9 @@ LOCAL_MODULE := test
 include $(BUILD_SHARED_LIBRARY)''')
 
 class AndroidSconsTest(sconstester.SConsTestCase):
+    """
+    Test cases for the android.py tool
+    """
 
     def testRuns(self):
         """
@@ -154,8 +179,8 @@ var = Variables(None, ARGUMENTS)
 var.AddVariables(('ANDROID_SDK', 'Android SDK path'))
 Tool.DefaultToolpath.append('%s')
 env = Environment(tools=['android'], variables=var)\n''' % (rootdir))
-        out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
-        self.assertEquals(0, rc)
+        result = self.run_scons(['ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
 
     def testErrorWhenNoAndroidVariables(self):
         """
@@ -171,9 +196,9 @@ env = Environment(tools=['android'])\n''' % (rootdir))
         old_stdout = sys.stdout
         sys.stdout = StringIO.StringIO()
         try:
-            out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
-            self.assertEquals(1, rc)
-            self.assertEquals(out[1], ('Please set ANDROID_SDK. '
+            result = self.run_scons(['ANDROID_SDK='+getSDK()])
+            self.assertEquals(1, result.return_code)
+            self.assertEquals(result.out[1], ('Please set ANDROID_SDK. '
                                        'export ANDROID_SDK=path\n'))
         finally:
             sys.stdout = old_stdout
@@ -191,8 +216,8 @@ var.AddVariables(('ANDROID_SDK', 'Android SDK path'))
 env = Environment(tools=['android'], variables=var)
 env.AndroidApp('Test')
 ''')
-        out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
-        self.assertEquals(0, rc)
+        result = self.run_scons(['ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
         self.assertTrue(self.exists('Test-debug.apk'))
 
     def testBasicNdkBuild(self):
@@ -214,16 +239,19 @@ lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
 env.Help(var.GenerateHelpText(env))
 ''')
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
-        self.assertEquals(0, rc)
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
         self.assertTrue(self.exists('Test-debug.apk'))
         self.assertTrue(self.exists('libs/armeabi/libtest.so', variant=''))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/armeabi/libtest.so'))
         # check that a rebuild is a no-op
-        out, err, rc = self.run_scons()
-        self.assertEquals("scons: `.' is up to date.\n", out[4])
+        result = self.run_scons()
+        self.assertEquals("scons: `.' is up to date.\n", result.out[4])
 
     def testDefaultProperties(self):
+        """
+        Test that default.properties file with empty lines works
+        """
         create_variant_build(self)
         create_android_ndk_project(self)
         self.write_file('default.properties','''
@@ -247,6 +275,9 @@ apk = env.AndroidApp('Test', native_folder='#libs')
 
 
     def testGeneratedRes(self):
+        """
+        Test that generated resources work
+        """
         create_variant_build(self)
         srcdir = create_android_project(self)
         self.write_file(srcdir + '/MyActivity.java',
@@ -272,18 +303,18 @@ env.Command('res/raw/fake.ogg', 'sounds/fake.wav',
     [Mkdir('res/raw'), Copy('$TARGET', '$SOURCE')])
 env.AndroidApp('Test', resources=['res','#res'])
 ''')
-        out, err, rc = self.run_scons(['ANDROID_SDK='+getSDK()])
-        self.assertEquals(0, rc)
+        result = self.run_scons(['ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
         self.assertTrue(self.exists('Test-debug.apk'))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'res/drawable/icon.png'))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'res/raw/fake.ogg'))
         # check rebuild is a no-op
-        out, err, rc = self.run_scons()
-        self.assertEquals("scons: `.' is up to date.\n", out[4])
+        result = self.run_scons()
+        self.assertEquals("scons: `.' is up to date.\n", result.out[4])
         # check that adding a resource is a rebuild
         self.write_file('sounds/fake.wav', '''BAR''')
-        out, err, rc = self.run_scons()
-        self.assertEquals('Copy("build/res/raw/fake.ogg", "sounds/fake.wav")\n', out[5])
+        result = self.run_scons()
+        self.assertEquals('Copy("build/res/raw/fake.ogg", "sounds/fake.wav")\n', result.out[5])
 
     def testNewNdkBuild(self):
         """
@@ -305,8 +336,8 @@ env.NdkBuild('new/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
 env.Help(var.GenerateHelpText(env))
 ''')
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
-        self.assertEquals(0, rc)
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
         self.assertTrue(self.exists('Test-debug.apk'))
         self.assertTrue(self.exists('libs/armeabi/libtest.so', variant=''))
         self.assertTrue(self.exists('new/libtest.so'))
@@ -335,21 +366,22 @@ env = Environment(tools=['android'], variables=var)
 lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.cpp'])
 apk = env.AndroidApp('Test', native_folder='libs')
 ''')
-        out, err, rc = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
-        self.assertEquals(0, rc)
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
         self.assertTrue(self.exists('Test-debug.apk'))
         self.assertTrue(self.exists('libs/armeabi/libtest.so'))
         # check the CXX command line has -fno-rtti, -mthumb at least
         compile_line = ''
-        for line in out:
+        for line in result.out:
             comps = line.split()
             if len(comps) and comps[0].endswith('arm-linux-androideabi-g++'):
                 compile_line = line.strip()
                 break
         self.assertNotEquals('', compile_line)
-        self.assertTrue('-fno-rtti' in compile_line, 'compile line "%s"' % compile_line)
-        self.assertTrue('-fno-exceptions' in compile_line, 'compile line "%s"' % compile_line)
-        self.assertTrue('-mthumb' in compile_line, 'compile line "%s"' % compile_line)
+        msg = 'compile line "%s"' % compile_line
+        self.assertTrue('-fno-rtti' in compile_line, msg)
+        self.assertTrue('-fno-exceptions' in compile_line, msg)
+        self.assertTrue('-mthumb' in compile_line, msg)
 
 if __name__ == '__main__':
     sconstester.unittest.main()
