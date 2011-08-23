@@ -383,5 +383,149 @@ apk = env.AndroidApp('Test', native_folder='libs')
         self.assertTrue('-fno-exceptions' in compile_line, msg)
         self.assertTrue('-mthumb' in compile_line, msg)
 
+    def checkLibraryAssembler(self, name, instruction):
+        """
+        Check the disassembled library contents for the instruction snippet.
+        Uses objdump on the command line to do this.
+        """
+        libtest = self.get_file(name)
+        libtest.close()
+        objdump = getNDK() + ("/toolchains/arm-linux-androideabi-4.4.3/prebuilt"
+                              "/linux-x86/bin/arm-linux-androideabi-objdump")
+        # check the decompiled code contains instruction
+        prog = sconstester.Popen([objdump, '-d', libtest.name],
+                                 shell=False,
+                                 stdout=sconstester.PIPE,
+                                 stderr=sconstester.PIPE)
+        result = prog.stdout.read()
+        return_code = prog.wait()
+        self.assertEquals(0, return_code)
+        self.assertTrue(result.find(instruction) != -1,
+                        '"%s" not found in disassembly' % instruction)
+
+    def checkLibraryArch(self, name, arch):
+        """
+        Check if a library is the given arch using the file utility
+        """
+        libtest = self.get_file(name)
+        libtest.close()
+        # check is an intel library
+        prog = sconstester.Popen(['file', libtest.name],
+                                 shell=False,
+                                 stdout=sconstester.PIPE,
+                                 stderr=sconstester.PIPE)
+        result = prog.stdout.read()
+        return_code = prog.wait()
+        self.assertEquals(0, return_code)
+        self.assertTrue(result.find(arch) != -1, result.strip())
+
+    def testX86NdkBuild(self):
+        """
+        Test that a compile for x86 works. Needs NDK r6+
+        """
+        create_variant_build(self)
+        create_new_android_ndk_project(self)
+
+        self.write_file('main.scons','''
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
+lib = env.NdkBuild('libtest.so', ['jni/test.c'], app_abi='armeabi x86')
+apk = env.AndroidApp('Test', native_folder='libs')
+env.Help(var.GenerateHelpText(env))
+''')
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+        self.checkLibraryArch('libs/armeabi/libtest.so', 'ARM')
+        self.checkLibraryArch('libs/x86/libtest.so', 'Intel')
+
+        self.assertTrue(self.exists('Test-debug.apk'))
+        self.assertTrue(self.exists('libs/armeabi/libtest.so'))
+        self.assertTrue(self.exists('libs/x86/libtest.so'))
+        self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/x86/libtest.so'))
+
+    def testV7aNdkBuild(self):
+        """
+        Test that a compile for v7a works.
+        """
+        create_variant_build(self)
+        create_new_android_ndk_project(self)
+        self.write_file('main.scons','''
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
+lib = env.NdkBuild('libs/armeabi-v7a/libtest.so', ['jni/test.c'], app_abi='armeabi-v7a')
+apk = env.AndroidApp('Test', native_folder='libs')
+''')
+        self.write_file('jni/test.c', '''#include <android/log.h>
+                int foo[] = {
+                        1,
+                        2,
+                        3,
+                        9,
+                        15
+                };
+
+                int not_really_jni(int a) {
+                        int x = a / foo[a];
+                        return x;
+                } ''')
+
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+        libname = 'libs/armeabi-v7a/libtest.so'
+        self.checkLibraryArch(libname, 'ARM')
+        # arm v7a (thumb2) includes shifted offset instructions
+        # ldr.w r1, [r3, r0, lsl #2]
+        # whereas thumb 1 has to do this in 2 steps
+        # lsl r2, r0, #2
+        # ldr r1, [r3, r2]
+        self.checkLibraryAssembler(libname, ', lsl #2]')
+
+        self.assertTrue(self.exists('Test-debug.apk'))
+        self.assertTrue(self.exists('libs/armeabi-v7a/libtest.so'))
+        self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/armeabi-v7a/libtest.so'))
+
+    def testMultipleAPKs(self):
+        """
+        Test that multiple APKs can be built
+        """
+        create_variant_build(self)
+        create_new_android_ndk_project(self)
+
+        self.write_file('main.scons','''
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
+lib = env.NdkBuild(['arm/armeabi/libtest.so', 'intel/x86/libtest.so'],
+                        ['jni/test.c'], app_abi='armeabi x86')
+env.AndroidApp('TestArm', native_folder='arm')
+env.AndroidApp('TestIntel', native_folder='intel')
+''')
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+
+        self.assertTrue(self.exists('TestArm-debug.apk'))
+        self.assertTrue(self.exists('arm/armeabi/libtest.so'))
+        self.assertTrue(self.exists('intel/x86/libtest.so'))
+        self.assertTrue(self.apk_contains('TestArm-debug.apk', 'lib/armeabi/libtest.so'))
+        self.assertFalse(self.apk_contains('TestArm-debug.apk', 'lib/x86/libtest.so'))
+
+        self.assertFalse(self.apk_contains('TestIntel-debug.apk', 'lib/armeabi/libtest.so'))
+        self.assertTrue(self.apk_contains('TestIntel-debug.apk', 'lib/x86/libtest.so'))
+
+        # ensure no errors on null build (R.java bug)
+        result = self.run_scons()
+        self.assertEquals([], result.err)
+
 if __name__ == '__main__':
     sconstester.unittest.main()

@@ -52,54 +52,115 @@ def get_android_target(fname):
         targetSdk = target_from_properties(properties)
     return (minSdk, targetSdk or minSdk)
 
-def add_gnu_tools(env):
+def add_gnu_tools(env, abi):
     """ Add the NDK GNU compiler tools to the Environment """
     gnu_tools = ['gcc', 'g++', 'gnulink', 'ar', 'gas']
     for tool in gnu_tools:
         env.Tool(tool)
-    toolchain = 'toolchains/arm-linux-androideabi-4.4.3/prebuilt/linux-x86/bin'
-    arm_prefix = os.path.join('$ANDROID_NDK', toolchain,
-                              'arm-linux-androideabi-')
-    env['CC'] =  arm_prefix+'gcc'
-    env['CXX'] = arm_prefix+'g++'
-    env['AS'] = arm_prefix+'as'
-    env['AR'] = arm_prefix+'ar'
-    env['RANLIB'] = arm_prefix+'ranlib'
-    env['OBJCOPY'] = arm_prefix+'objcopy'
-    env['STRIP'] = arm_prefix+'strip'
+    arm_linux = 'arm-linux-androideabi-4.4.3'
+    x86 = 'x86-4.4.3'
+    prebuilt = 'prebuilt/linux-x86/bin'
+    arm_toolchain = os.path.join('toolchains', arm_linux, prebuilt)
+    x86_toolchain = os.path.join('toolchains', x86, prebuilt)
+    toolchains = {'armeabi': arm_toolchain,
+                  'armeabi-v7a': arm_toolchain,
+                  'x86': x86_toolchain}
+    prefixes = {'armeabi': 'arm-linux-androideabi-',
+                'armeabi-v7a': 'arm-linux-androideabi-',
+                'x86': 'i686-android-linux-'}
+    toolchain = toolchains[abi]
+    prefix = prefixes[abi]
 
-def NdkBuild(env, library=None, inputs=None):
+    tool_prefix = os.path.join('$ANDROID_NDK', toolchain, prefix)
+    env['CC'] =  tool_prefix+'gcc'
+    env['CXX'] = tool_prefix+'g++'
+    env['AS'] = tool_prefix+'as'
+    env['AR'] = tool_prefix+'ar'
+    env['RANLIB'] = tool_prefix+'ranlib'
+    env['OBJCOPY'] = tool_prefix+'objcopy'
+    env['STRIP'] = tool_prefix+'strip'
+
+def NdkBuild(env, library=None, inputs=None,
+             manifest='#AndroidManifest.xml',
+             app_abi='armeabi'):
     """ Use the NDK to build a shared library from the given inputs. """
     # ensure ANDROID_NDK is set
     get_variable(env, 'ANDROID_NDK')
-    target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
-    env['CPPPATH'] = ['$CPPPATH', target_platform + '/arch-arm/usr/include']
-    if 'CPPDEFINES' not in env:
-        env['CPPDEFINES'] = []
-    env['CPPDEFINES'] += ['-DANDROID']
+    android_manifest = env.File(manifest)
+    if not env.has_key('ANDROID_TARGET'):
+        min_target, target = get_android_target(android_manifest.abspath)
+        env['ANDROID_MIN_TARGET'] = min_target
+        env['ANDROID_TARGET'] = target
 
-    android_cflags = '''-Wall -Wextra -fpic -mthumb-interwork
-    -ffunction-sections -funwind-tables -fstack-protector -fno-short-enums
-    -Wno-psabi -march=armv5te -mtune=xscale -msoft-float -mthumb -Os
-    -fomit-frame-pointer -fno-strict-aliasing -finline-limit=64
-    -Wa,--noexecstack'''.split()
-    android_cxxflags = '''-fno-rtti -fno-exceptions'''.split()
-    env['CFLAGS'] = ['$CFLAGS', android_cflags]
-    env['CXXFLAGS'] = ['$CXXFLAGS', android_cflags, android_cxxflags]
+    if type(library) == str:
+        library = [library]
+    app_abis = app_abi.split()
+    if len(app_abis) > len(library):
+        if len(library) > 1:
+            print "Error: libraries and app_abi do not coincide"
+            env.Exit(1)
+        libname = library[0]
+        library = [('libs/%s/' % abi) + libname for abi in app_abis]
 
-    if 'LIBPATH' not in env:
-        env['LIBPATH'] = []
-    env['LIBPATH'] += [target_platform + '/arch-arm/usr/lib']
-    shflags = '''-Wl,-soname,${TARGET.file}
-        -shared
-        --sysroot=%s/arch-arm
-        -Wl,--no-undefined -Wl,-z,noexecstack''' % (target_platform)
-    env['SHLINKFLAGS'] = shflags.split()
+    results = []
+    android_common_cflags = ''' -Wall -Wextra -fpic -ffunction-sections -Os
+                                -funwind-tables
+                                -fno-short-enums -Wno-psabi
+                                -fomit-frame-pointer -fno-strict-aliasing
+                                -Wa,--noexecstack'''.split()
 
-    lib = env.SharedLibrary('local/'+library, inputs, LIBS=['$LIBS', 'c'])
-    env.Command(library, lib, [Copy('$TARGET', "$SOURCE"),
-                               '$STRIP --strip-unneeded $TARGET'])
-    return lib
+    android_abi_cflags = {'armeabi': '''-mthumb-interwork -march=armv5te
+                                      -fstack-protector
+                                      -mtune=xscale -msoft-float -mthumb
+                                      -finline-limit=64''',
+
+                          'armeabi-v7a': ''' -march=armv7-a -mfloat-abi=softfp
+                                      -fstack-protector
+                                      -mfpu=vfp -mthumb -finline-limit=64 ''',
+
+                          'x86': '''  -finline-limit=300 '''}
+
+    libs_len = len(library)
+    for i in range(0, libs_len):
+        if libs_len > 1:
+            tmp_env = env.Clone()
+        else:
+            tmp_env = env
+        library_name = library[i]
+        abi = app_abis[i]
+        arch = 'arch-%s' % abi[0:3]
+        add_gnu_tools(tmp_env, abi)
+        if abi == 'x86':
+            if int(tmp_env['ANDROID_MIN_TARGET']) < 9:
+                tmp_env['ANDROID_MIN_TARGET'] = '9'
+        target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
+        tmp_env['CPPPATH'] = ['$CPPPATH',
+                              target_platform + '/%s/usr/include' % arch]
+        if 'CPPDEFINES' not in tmp_env:
+            tmp_env['CPPDEFINES'] = []
+        tmp_env['CPPDEFINES'] += ['-DANDROID']
+        android_cflags = android_abi_cflags[abi].split()
+        android_cflags.extend(android_common_cflags)
+        android_cxxflags = '''-fno-rtti -fno-exceptions'''.split()
+        tmp_env['CFLAGS'] = ['$CFLAGS', android_cflags]
+        tmp_env['CXXFLAGS'] = ['$CXXFLAGS', android_cflags, android_cxxflags]
+
+        if 'LIBPATH' not in tmp_env:
+            tmp_env['LIBPATH'] = []
+        tmp_env['LIBPATH'] += [target_platform + '/%s/usr/lib' % arch]
+        tmp_env['SHOBJSUFFIX'] = '.'+abi+'-os'
+        shflags = '''-Wl,-soname,${TARGET.file}
+            -shared
+            --sysroot=%s/%s
+            -Wl,--no-undefined -Wl,-z,noexecstack''' % (target_platform, arch)
+        tmp_env['SHLINKFLAGS'] = shflags.split()
+
+        lib = tmp_env.SharedLibrary('local/'+library_name, inputs,
+                                    LIBS=['$LIBS', 'c'])
+        tmp_env.Command(library_name, lib, [Copy('$TARGET', "$SOURCE"),
+                                   '$STRIP --strip-unneeded $TARGET'])
+        results.append(lib)
+    return results
 
 def NdkBuildLegacy(env, library=None, inputs=None, app_root='#.',
             build_dir='.'):
@@ -173,16 +234,19 @@ def AndroidApp(env, name,
 
     if not env.has_key('ANDROID_TARGET'):
         min_target, target = get_android_target(android_manifest.abspath)
-        env['ANDROID_MIN_TARGET'] = min_target
+        if 'ANDROID_MIN_TARGET' not in env:
+            env['ANDROID_MIN_TARGET'] = min_target
         env['ANDROID_TARGET'] = target
     env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK',
                               'platforms/android-$ANDROID_TARGET/android.jar')
+    safe_name = name.replace('-', '_')
     if not env.has_key('APP_PACKAGE'):
         package = get_android_package(android_manifest.abspath)
     else:
         package = env['APP_PACKAGE']
-    rfile = os.path.join('gen', get_rfile(package))
-    gen = env.Dir('gen')
+    gen_name = safe_name + '_gen'
+    rfile = os.path.join(gen_name, get_rfile(package))
+    gen = env.Dir(gen_name)
 
     # generate R.java
     resource_dirs = [env.Dir(r) for r in env.Flatten([resources])]
@@ -199,7 +263,7 @@ def AndroidApp(env, name,
     env.Depends(generated_rfile, android_manifest)
 
     # compile java to classes
-    bin_classes = name.replace('-','_')+'_bin/classes'
+    bin_classes = safe_name+'_bin/classes'
     classes = env.Java(target=bin_classes, source=[source],
                        JAVABOOTCLASSPATH='$ANDROID_JAR',
                        JAVASOURCEPATH=gen.path,
@@ -244,6 +308,7 @@ def AndroidApp(env, name,
     if native_folder:
         sofiles = env.Glob(native_folder + '/armeabi/*.so')
         sofiles.extend(env.Glob(native_folder + '/armeabi-v7a/*.so'))
+        sofiles.extend(env.Glob(native_folder + '/x86/*.so'))
         env.Depends(unaligned, env.Flatten([dex, tmp_package, sofiles]))
     else:
         env.Depends(unaligned, [dex, tmp_package])
@@ -302,7 +367,6 @@ def generate(env, **kw):
 
     env.Tool('javac')
     env.Tool('jar')
-    add_gnu_tools(env)
     env['AAPT'] = '$ANDROID_SDK/platform-tools/aapt'
     env['DX'] = '$ANDROID_SDK/platform-tools/dx'
     env['ZIPALIGN'] = '$ANDROID_SDK/tools/zipalign'
