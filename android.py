@@ -17,7 +17,7 @@ def get_rfile(package):
 def TargetFromProperties(fname):
     for line in open(fname).readlines():
         line = line.strip()
-        if line.startswith('#'):
+        if line.startswith('#') or not line:
             continue
         key, val = line.split('=')
         if key == 'target':
