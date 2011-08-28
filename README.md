@@ -128,4 +128,6 @@ error prone and can become obsolete or broken between NDK releases.
 
 There is no way to create an Android library project, only applications.
 
+Only compilation on Linux has been tested.
+
 [1]: http://developer.android.com/guide/publishing/app-signing.html
