@@ -62,6 +62,14 @@ lDhKlOOdjE2BkwAyKNcBsvs0EWcTa4gsXJjYZwZE2wweyGFamB4iyv/EggWuVMqFbA2I1HLnIUSE
 +VIxw6FbCpJ7RAj7r1WxRoHm7dVKWUAYFYZFQLuVuTMpgGhaKjkRxG6Lkur/AEiaJNAV7ZR0AAAA
 AElFTkSuQmCC
 """
+_TOOL_SETUP = """
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
+"""
 
 def getNDK():
     """
@@ -97,6 +105,7 @@ def create_android_project(tester):
     """
     Add an Android project to a test
     """
+    create_variant_build(tester)
     srcdir = 'src/com/example/android'
     tester.subdir('res/drawable')
     tester.subdir('res/layout')
@@ -207,7 +216,6 @@ env = Environment(tools=['android'])\n''' % (rootdir))
         """
         Test that a simple compile works, produces apk file
         """
-        create_variant_build(self)
         create_android_project(self)
 
         self.write_file('main.scons','''
@@ -224,17 +232,9 @@ env.AndroidApp('Test')
         """
         Test that a compile with NDK works, produces apk file
         """
-        create_variant_build(self)
-
         create_android_ndk_project(self)
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
 env.Help(var.GenerateHelpText(env))
@@ -252,7 +252,6 @@ env.Help(var.GenerateHelpText(env))
         """
         Test that default.properties file with empty lines works
         """
-        create_variant_build(self)
         create_android_ndk_project(self)
         self.write_file('default.properties','''
 #blank line test
@@ -260,13 +259,7 @@ env.Help(var.GenerateHelpText(env))
 target=android-13
 ''')
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
 ''')
@@ -278,7 +271,6 @@ apk = env.AndroidApp('Test', native_folder='#libs')
         """
         Test that generated resources work
         """
-        create_variant_build(self)
         srcdir = create_android_project(self)
         self.write_file(srcdir + '/MyActivity.java',
                           '''
@@ -293,12 +285,7 @@ apk = env.AndroidApp('Test', native_folder='#libs')
         self.subdir('sounds')
         self.write_file('sounds/fake.wav', '''BAM''')
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 env.Command('res/raw/fake.ogg', 'sounds/fake.wav',
     [Mkdir('res/raw'), Copy('$TARGET', '$SOURCE')])
 env.AndroidApp('Test', resources=['res','#res'])
@@ -321,16 +308,9 @@ env.AndroidApp('Test', resources=['res','#res'])
         Test that a compile with the new NDK build works,
         and is comparable with the legacy Android.mk system
         """
-        create_variant_build(self)
         create_android_ndk_project(self)
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
 env.NdkBuild('new/libtest.so', ['jni/test.c'])
 apk = env.AndroidApp('Test', native_folder='#libs')
@@ -350,19 +330,13 @@ env.Help(var.GenerateHelpText(env))
         Test that a compile with the new NDK build works,
         and is comparable with the legacy Android.mk system
         """
-        create_variant_build(self)
         create_new_android_ndk_project(self)
         self.write_file('jni/test.cpp',
                         '''#include <android/log.h>
                         class Foo {public: int i;};
                         int do_foo(const Foo &f) {return f.i;}''')
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.cpp'])
 apk = env.AndroidApp('Test', native_folder='libs')
 ''')
@@ -423,16 +397,9 @@ apk = env.AndroidApp('Test', native_folder='libs')
         """
         Test that a compile for x86 works. Needs NDK r6+
         """
-        create_variant_build(self)
         create_new_android_ndk_project(self)
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuild('libtest.so', ['jni/test.c'], app_abi='armeabi x86')
 apk = env.AndroidApp('Test', native_folder='libs')
 env.Help(var.GenerateHelpText(env))
@@ -451,15 +418,8 @@ env.Help(var.GenerateHelpText(env))
         """
         Test that a compile for v7a works.
         """
-        create_variant_build(self)
         create_new_android_ndk_project(self)
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuild('libs/armeabi-v7a/libtest.so', ['jni/test.c'], app_abi='armeabi-v7a')
 apk = env.AndroidApp('Test', native_folder='libs')
 ''')
@@ -496,16 +456,9 @@ apk = env.AndroidApp('Test', native_folder='libs')
         """
         Test that multiple APKs can be built
         """
-        create_variant_build(self)
         create_new_android_ndk_project(self)
 
-        self.write_file('main.scons','''
-var = Variables('../variables.cache', ARGUMENTS)
-var.AddVariables(
-    ('ANDROID_NDK', 'Android NDK path'),
-    ('ANDROID_SDK', 'Android SDK path'))
-env = Environment(tools=['android'], variables=var)
-var.Save('variables.cache', env)
+        self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuild(['arm/armeabi/libtest.so', 'intel/x86/libtest.so'],
                         ['jni/test.c'], app_abi='armeabi x86')
 env.AndroidApp('TestArm', native_folder='arm')
