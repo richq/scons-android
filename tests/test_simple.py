@@ -200,6 +200,29 @@ env.Help(var.GenerateHelpText(env))
         out, err, rc = self.run_scons()
         self.assertEquals("scons: `.' is up to date.\n", out[4])
 
+    def testDefaultProperties(self):
+        create_variant_build(self)
+        create_android_ndk_project(self)
+        self.write_file('default.properties','''
+#blank line test
+
+target=android-13
+''')
+
+        self.write_file('main.scons','''
+var = Variables('../variables.cache', ARGUMENTS)
+var.AddVariables(
+    ('ANDROID_NDK', 'Android NDK path'),
+    ('ANDROID_SDK', 'Android SDK path'))
+env = Environment(tools=['android'], variables=var)
+var.Save('variables.cache', env)
+lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
+apk = env.AndroidApp('Test', native_folder='#libs')
+''')
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+
+
     def testGeneratedRes(self):
         create_variant_build(self)
         srcdir = create_android_project(self)
