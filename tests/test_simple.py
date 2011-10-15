@@ -480,5 +480,24 @@ env.AndroidApp('TestIntel', native_folder='intel')
         result = self.run_scons()
         self.assertEquals([], result.err)
 
+    def testCFLAGS(self):
+        """
+        Test that CFLAGS and CXXFLAGS are flat arrays
+        """
+        create_new_android_ndk_project(self)
+        self.write_file('main.scons', _TOOL_SETUP + '''
+lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c'])
+print len(env['CFLAGS'])
+print len(env['CXXFLAGS'])
+''')
+        result = self.run_scons(['-Q', 'ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+        cflags_len = result.out[0].strip()
+        self.assertEquals('19', cflags_len,
+              "Expected CFLAGS to contain 19 entries (%s)" % cflags_len)
+        cxxflags_len = result.out[1].strip()
+        self.assertEquals('21', cxxflags_len,
+              "Expected CXXFLAGS to contain 21 entries (%s)" % cxxflags_len)
+
 if __name__ == '__main__':
     sconstester.unittest.main()
