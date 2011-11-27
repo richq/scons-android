@@ -134,8 +134,9 @@ def NdkBuild(env, library=None, inputs=None,
             if int(tmp_env['ANDROID_MIN_TARGET']) < 9:
                 tmp_env['ANDROID_MIN_TARGET'] = '9'
         target_platform = '$ANDROID_NDK/platforms/android-$ANDROID_MIN_TARGET'
-        tmp_env['CPPPATH'] = ['$CPPPATH',
-                              target_platform + '/%s/usr/include' % arch]
+        if 'CPPPATH' not in tmp_env:
+            tmp_env['CPPPATH'] = []
+        tmp_env['CPPPATH'] += [target_platform + '/%s/usr/include' % arch]
         if 'CPPDEFINES' not in tmp_env:
             tmp_env['CPPDEFINES'] = []
         tmp_env['CPPDEFINES'] += ['-DANDROID']
