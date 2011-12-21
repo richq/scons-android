@@ -46,11 +46,11 @@ def get_android_target(fname):
     properties = os.path.join(os.path.dirname(fname), 'default.properties')
     parsed = minidom.parse(open(fname))
     uses_sdk = parsed.getElementsByTagName('uses-sdk')[0]
-    minSdk = uses_sdk.getAttribute('android:minSdkVersion')
-    targetSdk = uses_sdk.getAttribute('android:targetSdkVersion')
+    min_sdk = uses_sdk.getAttribute('android:minSdkVersion')
+    target_sdk = uses_sdk.getAttribute('android:targetSdkVersion')
     if os.path.exists(properties):
-        targetSdk = target_from_properties(properties)
-    return (minSdk, targetSdk or minSdk)
+        target_sdk = target_from_properties(properties)
+    return (min_sdk, target_sdk or min_sdk)
 
 def add_gnu_tools(env, abi):
     """ Add the NDK GNU compiler tools to the Environment """
@@ -144,8 +144,8 @@ def NdkBuild(env, library=None, inputs=None,
         android_cflags.extend(android_common_cflags)
         android_cxxflags = '''-fno-rtti -fno-exceptions'''.split()
         tmp_env['CFLAGS'] = env.Flatten(['$CFLAGS', android_cflags])
-        tmp_env['CXXFLAGS'] = env.Flatten(['$CXXFLAGS', android_cflags, android_cxxflags])
-
+        tmp_env['CXXFLAGS'] = env.Flatten(['$CXXFLAGS', android_cflags,
+                                           android_cxxflags])
         if 'LIBPATH' not in tmp_env:
             tmp_env['LIBPATH'] = []
         tmp_env['LIBPATH'] += [target_platform + '/%s/usr/lib' % arch]
