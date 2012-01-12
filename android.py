@@ -87,7 +87,7 @@ def NdkBuild(env, library=None, inputs=None,
     # ensure ANDROID_NDK is set
     get_variable(env, 'ANDROID_NDK')
     android_manifest = env.File(manifest)
-    if not env.has_key('ANDROID_TARGET'):
+    if 'ANDROID_TARGET' not in env:
         min_target, target = get_android_target(android_manifest.abspath)
         env['ANDROID_MIN_TARGET'] = min_target
         env['ANDROID_TARGET'] = target
@@ -168,7 +168,10 @@ def NdkBuildLegacy(env, library=None, inputs=None, app_root='#.',
     """ Use ndk-build to compile native code. """
     # ensure ANDROID_NDK is set
     get_variable(env, 'ANDROID_NDK')
-    verbose = 0 if env.GetOption('silent') else 1
+    if env.GetOption('silent'):
+        verbose = 0
+    else:
+        verbose = 1
     jobs = env.GetOption('num_jobs')
     build_path = env.Dir(build_dir).path
     app_path = env.Dir(app_root).abspath
@@ -192,7 +195,7 @@ def emit_java_classes(target, source, env):
     """
     classdir = target[0]
     tlist, slist = _DEFAULT_JAVA_EMITTER(target, source, env)
-    if env.has_key('APP_PACKAGE'):
+    if 'APP_PACKAGE' in env:
         out = []
         for entry in slist:
             classname = env['APP_PACKAGE'] + entry.name.replace('.java', '')
@@ -233,7 +236,7 @@ def AndroidApp(env, name,
     """ Create an Android application from the given inputs. """
     android_manifest = env.File(manifest)
 
-    if not env.has_key('ANDROID_TARGET'):
+    if 'ANDROID_TARGET' not in env:
         min_target, target = get_android_target(android_manifest.abspath)
         if 'ANDROID_MIN_TARGET' not in env:
             env['ANDROID_MIN_TARGET'] = min_target
@@ -241,7 +244,7 @@ def AndroidApp(env, name,
     env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK',
                               'platforms/android-$ANDROID_TARGET/android.jar')
     safe_name = name.replace('-', '_')
-    if not env.has_key('APP_PACKAGE'):
+    if 'APP_PACKAGE' not in env:
         package = get_android_package(android_manifest.abspath)
     else:
         package = env['APP_PACKAGE']
@@ -327,7 +330,7 @@ def AndroidApp(env, name,
     env.Ignore(adb_install[0].dir, adb_install)
     env.Alias('install', adb_install)
 
-    if not env.has_key('APP_ACTIVITY'):
+    if 'APP_ACTIVITY' not in env:
         activity = get_android_name(android_manifest.abspath)
     else:
         activity = env['APP_ACTIVITY']
