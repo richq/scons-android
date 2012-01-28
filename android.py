@@ -230,7 +230,7 @@ SCons.Tool.javac.emit_java_classes = emit_java_classes
 
 def AndroidApp(env, name,
                manifest='#/AndroidManifest.xml',
-               source='src',
+               source='#/src',
                resources='#/res',
                native_folder=None):
     """ Create an Android application from the given inputs. """
