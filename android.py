@@ -94,7 +94,12 @@ def NdkBuild(env, library=None, inputs=None,
 
     if type(library) == str:
         library = [library]
-    app_abis = app_abi.split()
+    try:
+        app_abis = app_abi.split()
+    except:
+        # Assume that app_abis is a collection already
+        app_abis = app_abi
+
     if len(app_abis) > len(library):
         if len(library) > 1:
             print "Error: libraries and app_abi do not coincide"
