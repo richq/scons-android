@@ -89,7 +89,7 @@ def getSDK():
     else:
         return os.path.expanduser('~/tools/android-sdk-linux_86')
 
-def create_variant_build(tester):
+def create_variant_build(tester, duplicate):
     """
     Add variant build boilerplate to a test
     """
@@ -98,14 +98,14 @@ def create_variant_build(tester):
     tester.write_file('SConstruct','''
 from SCons import Tool
 Tool.DefaultToolpath.append('%s')
-SConscript('main.scons', variant_dir='build', duplicate=0)\n''' % (rootdir))
+SConscript('main.scons', variant_dir='build', duplicate=%d)\n''' % (rootdir, duplicate))
 
 
-def create_android_project(tester):
+def create_android_project(tester, duplicate=0):
     """
     Add an Android project to a test
     """
-    create_variant_build(tester)
+    create_variant_build(tester, duplicate)
     srcdir = 'src/com/example/android'
     tester.subdir('res/drawable')
     tester.subdir('res/layout')
@@ -148,21 +148,21 @@ def create_android_project(tester):
                       ''')
     return srcdir
 
-def create_new_android_ndk_project(tester):
+def create_new_android_ndk_project(tester, duplicate=0):
     """
     Create a new-style NDK library Android project
     """
-    create_android_project(tester)
+    create_android_project(tester, duplicate)
     tester.subdir('jni')
     tester.write_file('jni/test.c',
                       '''#include <android/log.h>
                       int not_really_jni(void) { return 1; }''')
 
-def create_android_ndk_project(tester):
+def create_android_ndk_project(tester, duplicate=0):
     """
     Create a ndk-build NDK library Android project
     """
-    create_new_android_ndk_project(tester)
+    create_new_android_ndk_project(tester, duplicate)
     tester.write_file('jni/Android.mk',
                       '''
 LOCAL_PATH := $(call my-dir)
@@ -212,11 +212,8 @@ env = Environment(tools=['android'])\n''' % (rootdir))
         finally:
             sys.stdout = old_stdout
 
-    def testBasicBuildDir(self):
-        """
-        Test that a simple compile works, produces apk file
-        """
-        create_android_project(self)
+    def checkBasicBuild(self, duplicate):
+        create_android_project(self, duplicate)
 
         self.write_file('main.scons','''
 var = Variables(None, ARGUMENTS)
@@ -228,11 +225,18 @@ env.AndroidApp('Test')
         self.assertEquals(0, result.return_code)
         self.assertTrue(self.exists('Test-debug.apk'))
 
-    def testBasicNdkBuild(self):
+    def testBasicBuildDir(self):
+        """
+        Test that a simple compile works, produces apk file
+        """
+        self.checkBasicBuild(0)
+        self.checkBasicBuild(1)
+
+    def checkBasicNdkBuild(self, duplicate):
         """
         Test that a compile with NDK works, produces apk file
         """
-        create_android_ndk_project(self)
+        create_android_ndk_project(self, duplicate)
 
         self.write_file('main.scons', _TOOL_SETUP + '''
 lib = env.NdkBuildLegacy('libs/armeabi/libtest.so', ['jni/test.c'])
@@ -247,6 +251,13 @@ env.Help(var.GenerateHelpText(env))
         # check that a rebuild is a no-op
         result = self.run_scons()
         self.assertEquals("scons: `.' is up to date.\n", result.out[4])
+
+    def testBasicNdkBuild(self):
+        """
+        Test that a compile with NDK works, produces apk file
+        """
+        self.checkBasicNdkBuild(0)
+        self.checkBasicNdkBuild(1)
 
     def testDefaultProperties(self):
         """
