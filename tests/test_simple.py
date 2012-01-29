@@ -404,17 +404,17 @@ apk = env.AndroidApp('Test', native_folder='libs')
         self.assertEquals(0, return_code)
         self.assertTrue(result.find(arch) != -1, result.strip())
 
-    def testX86NdkBuild(self):
+    def checkMultiAbiBuild(self, app_abi):
         """
         Test that a compile for x86 works. Needs NDK r6+
         """
         create_new_android_ndk_project(self)
 
         self.write_file('main.scons', _TOOL_SETUP + '''
-lib = env.NdkBuild('libtest.so', ['jni/test.c'], app_abi='armeabi x86')
+lib = env.NdkBuild('libtest.so', ['jni/test.c'], app_abi=%s)
 apk = env.AndroidApp('Test', native_folder='libs')
 env.Help(var.GenerateHelpText(env))
-''')
+''' % app_abi)
         result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
         self.assertEquals(0, result.return_code)
         self.checkLibraryArch('libs/armeabi/libtest.so', 'ARM')
@@ -424,6 +424,10 @@ env.Help(var.GenerateHelpText(env))
         self.assertTrue(self.exists('libs/armeabi/libtest.so'))
         self.assertTrue(self.exists('libs/x86/libtest.so'))
         self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/x86/libtest.so'))
+
+    def testX86NdkBuild(self):
+        self.checkMultiAbiBuild("'armeabi x86'")
+        self.checkMultiAbiBuild('["armeabi", "x86"]')
 
     def testV7aNdkBuild(self):
         """
