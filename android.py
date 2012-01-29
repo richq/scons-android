@@ -246,8 +246,7 @@ def AndroidApp(env, name,
         if 'ANDROID_MIN_TARGET' not in env:
             env['ANDROID_MIN_TARGET'] = min_target
         env['ANDROID_TARGET'] = target
-    env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK',
-                              'platforms/android-$ANDROID_TARGET/android.jar')
+
     safe_name = name.replace('-', '_')
     if 'APP_PACKAGE' not in env:
         package = get_android_package(android_manifest.abspath)
@@ -328,7 +327,7 @@ def AndroidApp(env, name,
     # zipalign -f 4 unaligned aligned
     app = env.ZipAlign(finalname, unaligned)
     # installation marker
-    adb = os.path.join('$ANDROID_SDK','platform-tools/adb')
+    adb = env['ANDROID_ADB']
     adb_install = env.Command(name + '-installed', app,
         [adb + ' install -r $SOURCE && date > $TARGET'])
     # do not run by default
@@ -380,6 +379,9 @@ def generate(env, **kw):
     env['DX'] = '$ANDROID_SDK/platform-tools/dx'
     env['ZIPALIGN'] = '$ANDROID_SDK/tools/zipalign'
     env['JARSIGNER'] = 'jarsigner'
+    env['ANDROID_JAR'] = os.path.join('$ANDROID_SDK',
+                              'platforms/android-$ANDROID_TARGET/android.jar')
+    env['ANDROID_ADB'] = os.path.join('$ANDROID_SDK','platform-tools/adb')
 
     bld = Builder(action='$AAPT $AAPT_ARGS', suffix='.java',
                   source_scanner=DirScanner)
