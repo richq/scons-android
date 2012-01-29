@@ -53,8 +53,8 @@ cost of extra rebuilds and having to maintain both SCons script and Makefiles.
 ## Application ABIs
 
 To compile multiple architectures at once, you can use the `app_abis` argument.
-This is a space-separated string value. Suitable values are `armeabi`,
-`armeabi-v7a` and `x86`. The default is `armeabi`.
+This is a list of ABIs or a space-separated string value. Suitable values are
+`armeabi`, `armeabi-v7a` and `x86`. The default is `armeabi`.
 
     libs = env.NdkBuild('libmyshared.so', ['jni/my_code.c'],
                             app_abis='armeabi armeabi-v7a x86')
