@@ -530,5 +530,40 @@ lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c', 'jni/test2.c'])
         result = self.run_scons(['-Q', 'ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
         self.assertEquals(0, result.return_code)
 
+    def testExternalJar(self):
+        create_new_android_ndk_project(self)
+        self.subdir('external_jar/src/com/example')
+        self.write_file('external_jar/src/com/example/Hello.java', '''\
+package com.example;
+
+public class Hello {
+    public Hello() {}
+    public String getMessage() { return "Hello"; }
+}
+''')
+        self.write_file('external_jar/SConstruct', '''\
+env = Environment()
+classes = env.Java(target='classes', source='src')
+env.Jar(target='test_lib.jar', source=classes)
+''')
+        result = self.run_scons(['-C', 'external_jar'])
+        self.assertEquals(0, result.return_code)
+        # check the external jarfile is created..
+        self.assertTrue(self.exists('external_jar/test_lib.jar', '.'))
+
+        # now make sure we link with it in an Android project...
+        self.write_file('main.scons', _TOOL_SETUP + '''
+env['JAVACLASSPATH'] = 'external_jar/test_lib.jar'
+env.AndroidApp('TestExternalJar')
+''')
+        self.write_file('src/com/example/android/MyActivity.java',
+                          '''
+                          package com.example.android;
+                          import com.example.Hello;
+                          public class MyActivity {}
+                          ''')
+        result = self.run_scons(['ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+
 if __name__ == '__main__':
     sconstester.unittest.main()
