@@ -289,20 +289,28 @@ def AndroidApp(env, name,
              AAPT_ARGS=aapt_args.split())
     env.Depends(generated_rfile, android_manifest)
 
+    dex = []
     if get_android_has_code(android_manifest.abspath):
         # compile java to classes
         bin_classes = safe_name+'_bin/classes'
+        default_cp = env.Dir(bin_classes).path
+        has_cp = 'JAVACLASSPATH' in env and env['JAVACLASSPATH']
+        if has_cp:
+            default_cp = env['JAVACLASSPATH'] + os.pathsep + default_cp
         classes = env.Java(target=bin_classes, source=[source],
-                       JAVABOOTCLASSPATH='$ANDROID_JAR',
-                       JAVASOURCEPATH=gen.path,
-                       JAVACFLAGS='-g -encoding ascii'.split(),
-                       JAVACLASSPATH=env.Dir(bin_classes).path)
+                           JAVABOOTCLASSPATH='$ANDROID_JAR',
+                           JAVASOURCEPATH=gen.path,
+                           JAVACFLAGS='-g -encoding ascii'.split(),
+                           JAVACLASSPATH=default_cp)
         env.Depends(classes, rfile)
 
         # dex file from classes
-        dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
-    else:
-        dex = []
+        dex_input = classes
+        if has_cp:
+            env['DX_CLASSPATH'] = env['JAVACLASSPATH'].split(os.pathsep)
+            dex_input.extend(env['DX_CLASSPATH'])
+        dex = env.Dex(name+'classes.dex', dex_input, DX_DIR=env.Dir(bin_classes).path)
+        env.Depends(dex, dex_input)
 
     # resources
     aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -F $TARGET '
@@ -409,7 +417,7 @@ def generate(env, **kw):
                   source_scanner=DirScanner)
     env.Append(BUILDERS = { 'Aapt': bld })
 
-    bld = Builder(action='$DX --dex --output=$TARGET $DX_DIR', suffix='.dex')
+    bld = Builder(action='$DX --dex --output=$TARGET $DX_DIR $DX_CLASSPATH', suffix='.dex')
     env.Append(BUILDERS = { 'Dex': bld })
     env['JAVA'] = 'java'
 
