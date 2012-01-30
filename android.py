@@ -288,17 +288,20 @@ def AndroidApp(env, name,
              AAPT_ARGS=aapt_args.split())
     env.Depends(generated_rfile, android_manifest)
 
-    # compile java to classes
-    bin_classes = safe_name+'_bin/classes'
-    classes = env.Java(target=bin_classes, source=[source],
+    if get_android_has_code(android_manifest.abspath):
+        # compile java to classes
+        bin_classes = safe_name+'_bin/classes'
+        classes = env.Java(target=bin_classes, source=[source],
                        JAVABOOTCLASSPATH='$ANDROID_JAR',
                        JAVASOURCEPATH=gen.path,
                        JAVACFLAGS='-g -encoding ascii'.split(),
                        JAVACLASSPATH=env.Dir(bin_classes).path)
-    env.Depends(classes, rfile)
+        env.Depends(classes, rfile)
 
-    # dex file from classes
-    dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
+        # dex file from classes
+        dex = env.Dex(name+'classes.dex', classes, DX_DIR=env.Dir(bin_classes).path)
+    else:
+        dex = []
 
     # resources
     aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -F $TARGET '
