@@ -12,6 +12,22 @@ from xml.dom import minidom
 
 NSURI = 'http://schemas.android.com/apk/res/android'
 
+def get_android_has_code(fname):
+    parsed = minidom.parse(open(fname))
+    application = parsed.getElementsByTagName('application')[0]
+    hasCode = application.getAttributeNS(NSURI, 'hasCode')
+    if hasCode is None:
+        return True # Default value
+    
+    if hasCode.lower() in ("yes", "true", "1"):
+        return True
+    
+    if hasCode.lower() in ("no", "false", "0"):
+        return False
+    
+    raise Error("Value of hasCode is unkown")
+
+
 def get_android_package(fname):
     """ Get the value of the package from <manifest package='foo'> """
     parsed = minidom.parse(open(fname))
