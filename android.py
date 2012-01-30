@@ -18,13 +18,13 @@ def get_android_has_code(fname):
     hasCode = application.getAttributeNS(NSURI, 'hasCode')
     if hasCode is None:
         return True # Default value
-    
+
     if hasCode.lower() in ("yes", "true", "1"):
         return True
-    
+
     if hasCode.lower() in ("no", "false", "0"):
         return False
-    
+
     raise Error("Value of hasCode is unkown")
 
 
