@@ -8,6 +8,7 @@ SCons Tool to Build Android Applications
 import os
 from SCons.Builder import Builder
 from SCons.Defaults import DirScanner, Copy
+from SCons.Errors import UserError
 from xml.dom import minidom
 
 NSURI = 'http://schemas.android.com/apk/res/android'
@@ -16,7 +17,7 @@ def get_android_has_code(fname):
     parsed = minidom.parse(open(fname))
     application = parsed.getElementsByTagName('application')[0]
     hasCode = application.getAttributeNS(NSURI, 'hasCode')
-    if hasCode is None:
+    if not hasCode:
         return True # Default value
 
     if hasCode.lower() in ("yes", "true", "1"):
@@ -25,7 +26,7 @@ def get_android_has_code(fname):
     if hasCode.lower() in ("no", "false", "0"):
         return False
 
-    raise Error("Value of hasCode is unkown")
+    raise UserError("Value of hasCode is unknown")
 
 
 def get_android_package(fname):
