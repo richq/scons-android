@@ -10,6 +10,8 @@ from SCons.Builder import Builder
 from SCons.Defaults import DirScanner, Copy
 from xml.dom import minidom
 
+NSURI = 'http://schemas.android.com/apk/res/android'
+
 def get_android_package(fname):
     """ Get the value of the package from <manifest package='foo'> """
     parsed = minidom.parse(open(fname))
@@ -35,7 +37,7 @@ def get_android_name(fname):
     """ Get the android activity name from <activity android:name='foo'> """
     parsed = minidom.parse(open(fname))
     activity = parsed.getElementsByTagName('activity')[0]
-    return activity.getAttribute('android:name')
+    return activity.getAttributeNS(NSURI, 'name')
 
 def get_android_target(fname):
     """
@@ -46,8 +48,8 @@ def get_android_target(fname):
     properties = os.path.join(os.path.dirname(fname), 'default.properties')
     parsed = minidom.parse(open(fname))
     uses_sdk = parsed.getElementsByTagName('uses-sdk')[0]
-    min_sdk = uses_sdk.getAttribute('android:minSdkVersion')
-    target_sdk = uses_sdk.getAttribute('android:targetSdkVersion')
+    min_sdk = uses_sdk.getAttributeNS(NSURI, 'minSdkVersion')
+    target_sdk = uses_sdk.getAttributeNS(NSURI, 'targetSdkVersion')
     if os.path.exists(properties):
         target_sdk = target_from_properties(properties)
     return (min_sdk, target_sdk or min_sdk)
