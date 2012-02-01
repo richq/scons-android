@@ -100,28 +100,56 @@ from SCons import Tool
 Tool.DefaultToolpath.append('%s')
 SConscript('main.scons', variant_dir='build', duplicate=%d)\n''' % (rootdir, duplicate))
 
-
-def create_android_project(tester, duplicate=0):
-    """
-    Add an Android project to a test
-    """
-    create_variant_build(tester, duplicate)
-    srcdir = 'src/com/example/android'
+def create_resources(tester):
     tester.subdir('res/drawable')
     tester.subdir('res/layout')
     tester.subdir('res/values')
-    tester.subdir(srcdir)
     tester.write_file('res/drawable/icon.png', base64.decodestring(_ICON_DATA))
     tester.write_file('res/values/strings.xml',
                       '''<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">My Test App</string>
 </resources>''')
+
+def create_activity(tester):
+    srcdir = 'src/com/example/android'
+    tester.subdir(srcdir)
     tester.write_file(srcdir + '/MyActivity.java',
                       '''
                       package com.example.android;
                       public class MyActivity {}
                       ''')
+    return srcdir
+
+def create_nocode_manifest(tester):
+    tester.write_file('AndroidManifest.xml',
+                      '''<?xml version="1.0" encoding="utf-8"?>
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.android"
+    android:installLocation="auto"
+    android:versionCode="1"
+    android:versionName="1.0" >
+    <application
+        android:hasCode="false"
+        android:icon="@drawable/icon"
+        android:label="@string/app_name">
+        <activity
+            android:name="android.app.NativeActivity"
+            android:label="@string/app_name">
+            <meta-data android:name="android.app.lib_name"
+                    android:value="native-activity" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+    <uses-sdk android:targetSdkVersion="13" android:minSdkVersion="9" />
+</manifest>\n''')
+
+def create_standard_manifest(tester):
     tester.write_file('AndroidManifest.xml',
                       '''<?xml version="1.0" encoding="utf-8"?>
 <manifest
@@ -144,19 +172,31 @@ def create_android_project(tester, duplicate=0):
 
     </application>
     <uses-sdk android:targetSdkVersion="10" android:minSdkVersion="4" />
-</manifest>
-                      ''')
+</manifest>\n''')
+
+def create_android_project(tester, duplicate=0):
+    """
+    Add an Android project to a test
+    """
+    create_variant_build(tester, duplicate)
+    create_resources(tester)
+    srcdir = create_activity(tester)
+    create_standard_manifest(tester)
+
     return srcdir
+
+def create_jni_stub(tester):
+    tester.subdir('jni')
+    tester.write_file('jni/test.c',
+                      '''#include <android/log.h>
+                      int not_really_jni(void) { return 1; }''')
 
 def create_new_android_ndk_project(tester, duplicate=0):
     """
     Create a new-style NDK library Android project
     """
     create_android_project(tester, duplicate)
-    tester.subdir('jni')
-    tester.write_file('jni/test.c',
-                      '''#include <android/log.h>
-                      int not_really_jni(void) { return 1; }''')
+    create_jni_stub(tester)
 
 def create_android_ndk_project(tester, duplicate=0):
     """
@@ -564,6 +604,35 @@ env.AndroidApp('TestExternalJar')
                           ''')
         result = self.run_scons(['ANDROID_SDK='+getSDK()])
         self.assertEquals(0, result.return_code)
+
+    def testNdkNativeActivity(self):
+        """
+        Test the android:hasCode=false case for native activities
+        """
+        create_variant_build(self, duplicate=1)
+        create_resources(self)
+        create_nocode_manifest(self)
+        self.subdir('jni')
+        self.write_file('jni/test.c','''\
+#include <android/log.h>
+#include <android_native_app_glue.h>
+
+void android_main(struct android_app *state)
+{
+	app_dummy();
+}
+''')
+        self.write_file('main.scons', _TOOL_SETUP + '''
+env.Repository('$ANDROID_NDK/sources')
+env['CPPPATH'] = ['android/native_app_glue']
+env.MergeFlags('-llog -landroid')
+lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c', Glob('android/native_app_glue/*.c')], app_abi='armeabi')
+apk = env.AndroidApp('Test')
+''')
+        result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+        # check the apk contains *something*
+        self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/armeabi/libtest.so'))
 
 if __name__ == '__main__':
     sconstester.unittest.main()

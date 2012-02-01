@@ -312,6 +312,10 @@ def AndroidApp(env, name,
         dex = env.Dex(name+'classes.dex', dex_input, DX_DIR=env.Dir(bin_classes).path)
         env.Depends(dex, dex_input)
 
+    if not dex and not native_folder:
+        # assume this is a native-only project..
+        native_folder = 'libs'
+
     # resources
     aapt_args = 'package -f -m -M $MANIFEST -I $ANDROID_JAR -F $TARGET '
     aapt_args += res_string
@@ -337,8 +341,7 @@ def AndroidApp(env, name,
     if native_folder:
         apk_args += ' -nf $NATIVE_FOLDER'
         native_path = env.Dir(native_folder).path
-
-    unaligned = env.ApkBuilder(outname, dex,
+    unaligned = env.ApkBuilder(outname, [dex, tmp_package],
                    NATIVE_FOLDER=native_path,
                    UNSIGNED=unsigned_flag,
                    AP=tmp_package,
