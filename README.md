@@ -91,6 +91,43 @@ your project. The argument `manifest` can be used to override this:
 
 This is useful if your project does not use the standard Android layout.
 
+## Native Activity
+
+The native activity feature was new in Android 2.3 and provides a way to create
+an Android application without any Java source code. In order to use it, you
+have to include a bit of glue code that is distributed in source form in the
+Android NDK. The source code is in "NDK Module" form, which sadly depend
+heavily on the ndk-build infrastructure and Makefile syntax for their
+meta-data.
+
+However, since this is such a simple module you can make some assumptions and
+use the following snippet to build the glue code together with your native
+activity:
+
+    env.Repository('$ANDROID_NDK/sources')
+    glue_code = env.Glob('android/native_app_glue/*.c')
+    env['CPPPATH'] = 'android/native_app_glue'
+    env.MergeFlags('-llog -landroid')
+    env.NdkBuild('libmyactivity.so', ['jni/my_code.c', glue_code])
+    env.AndroidApp('MyApp')
+
+Using a Repository means SCons will search for files there as well as in your
+local project. This means you don't have to copy the `native_app_glue` code
+into your own project.
+
+The Glob call picks up any C code in that directory. This is a bit naughty, as
+the real code contents is defined in the `Android.mk` file inside the module.
+
+Setting the CPPPATH to `android/native_app_glue` is another slight compromise,
+since again the real "export path" is described in Android.mk.
+
+Adding -llog to the list of link flags is also an assumption based on
+inspection of the Android.mk file.
+
+In future versions of this tool, I am toying with adding an NdkImportModule
+feature to automate the above snippet. I've had no need for this yet though, so
+it isn't high priority.
+
 ## Environment Variables
 
 The following environment variables or SCons `Variables` are used to control the build:
