@@ -113,9 +113,9 @@ def NdkBuild(env, library=None, inputs=None,
 
     if type(library) == str:
         library = [library]
-    try:
+    if type(app_abi) == str:
         app_abis = app_abi.split()
-    except:
+    else:
         # Assume that app_abis is a collection already
         app_abis = app_abi
 
