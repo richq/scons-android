@@ -119,11 +119,12 @@ def NdkBuild(env, library=None, inputs=None,
         # Assume that app_abis is a collection already
         app_abis = app_abi
 
-    if len(app_abis) > len(library):
-        if len(library) > 1:
-            print "Error: libraries and app_abi do not coincide"
-            env.Exit(1)
-        libname = library[0]
+    if len(app_abis) > len(library) and len(library) > 1:
+        print "Error: libraries and app_abi do not coincide"
+        env.Exit(1)
+
+    libname = library[0]
+    if len(library) == 1 and libname.find(os.path.sep) == -1:
         library = [('libs/%s/' % abi) + libname for abi in app_abis]
 
     results = []

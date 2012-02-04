@@ -626,7 +626,7 @@ void android_main(struct android_app *state)
 env.Repository('$ANDROID_NDK/sources')
 env['CPPPATH'] = ['android/native_app_glue']
 env.MergeFlags('-llog -landroid')
-lib = env.NdkBuild('libs/armeabi/libtest.so', ['jni/test.c', Glob('android/native_app_glue/*.c')], app_abi='armeabi')
+lib = env.NdkBuild('libtest.so', ['jni/test.c', Glob('android/native_app_glue/*.c')])
 apk = env.AndroidApp('Test')
 ''')
         result = self.run_scons(['ANDROID_NDK='+getNDK(), 'ANDROID_SDK='+getSDK()])
