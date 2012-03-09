@@ -91,6 +91,39 @@ your project. The argument `manifest` can be used to override this:
 
 This is useful if your project does not use the standard Android layout.
 
+## ProGuard
+
+Enabling ProGuard in your project is done by setting PROGUARD_CONFIG to the
+name of the configuration file. This is analogous to the way it is done in the
+official build system and lets you make use of the `android` command line tool
+to generate the correct configuration. For Android SDK r16 and earlier you
+should use a line like this to use the generated configuration file:
+
+    env['PROGUARD_CONFIG'] = 'proguard.cfg'
+
+Prior to Android SDK r17 the `proguard.cfg` file contained all of the
+configuration settings needed for Android. This was a bad idea as updates to
+the defaults would mean manual steps to regenerate proguard.cfg for every
+Android developer. From r17 onwards a default configuration template is
+included in the SDK, so your PROGUARD_CONFIG value should look like this:
+
+    # Android SDK r17+
+    env['PROGUARD_CONFIG'] = '$ANDROID_SDK/tools/proguard/proguard-android.txt:proguard-project.txt'
+
+This will use the SDK's configuration followed by your own. Note the name
+change to proguard-project.txt. You must separate configuration files with
+the path seperator symbol ':' or ';'. The `android` tool actually creates an
+empty proguard config file now (it just has comments) so there's really no need
+to use your own if you are happy with the defaults. In that case, the
+PROGUARD_CONFIG value can be:
+
+    # Android SDK r17+, just the defaults
+    env['PROGUARD_CONFIG'] = '$ANDROID_SDK/tools/proguard/proguard-android.txt'
+
+ProGuard is only executed when you run a release build, which is only performed
+when the ANDROID_KEY_STORE and ANDROID_KEY_NAME variables are set in the
+Environment used in `env.AndroidApp()`.
+
 ## Native Activity
 
 The native activity feature was new in Android 2.3 and provides a way to create
