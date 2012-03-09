@@ -9,6 +9,9 @@ directory:
     cd site_scons/site_tools
     git clone git://github.com/richq/scons-android.git android
 
+There are no formal release versions - I keep master usable at all times and
+push out bug fixes and new features as I discover/need them.
+
 ## Basic Usage of the AndroidApp function
 
 Add the tool to the Environment in your SConstruct file and use the AndroidApp
@@ -49,6 +52,9 @@ creating an Android.mk file, then you can use `NdkBuildLegacy`:
 This is the older way of doing things and scons passes the native compilation
 work off to GNU Make. You can use more of the ndk-build features, but at the
 cost of extra rebuilds and having to maintain both SCons script and Makefiles.
+
+As the "Legacy" tag suggests, I no longer use this method for my own projects
+and it may disappear in the future.
 
 ## Application ABIs
 
