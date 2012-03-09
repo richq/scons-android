@@ -78,7 +78,7 @@ def getNDK():
     if 'ANDROID_NDK' in os.environ:
         return os.environ['ANDROID_NDK']
     else:
-        return os.path.expanduser('~/tools/android-ndk-r6')
+        return os.path.expanduser('~/tools/android-ndk-r7b')
 
 def getSDK():
     """
