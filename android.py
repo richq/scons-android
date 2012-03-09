@@ -298,7 +298,9 @@ def AndroidApp(env, name,
         has_cp = 'JAVACLASSPATH' in env and env['JAVACLASSPATH']
         if has_cp:
             default_cp = env['JAVACLASSPATH'] + os.pathsep + default_cp
-        classes = env.Java(target=bin_classes, source=[source],
+        if type(source) == str:
+            source = [source]
+        classes = env.Java(target=bin_classes, source=source,
                            JAVABOOTCLASSPATH='$ANDROID_JAR',
                            JAVASOURCEPATH=gen.path,
                            JAVACFLAGS='-g -encoding ascii'.split(),
