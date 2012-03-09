@@ -65,6 +65,8 @@ AElFTkSuQmCC
 _TOOL_SETUP = """
 var = Variables('../variables.cache', ARGUMENTS)
 var.AddVariables(
+    ('ANDROID_KEY_STORE', 'Android keystore'),
+    ('ANDROID_KEY_NAME', 'Android keyname'),
     ('ANDROID_NDK', 'Android NDK path'),
     ('ANDROID_SDK', 'Android SDK path'))
 env = Environment(tools=['android'], variables=var)
@@ -79,6 +81,16 @@ def getNDK():
         return os.environ['ANDROID_NDK']
     else:
         return os.path.expanduser('~/tools/android-ndk-r7b')
+
+def getKeyStore():
+    """
+    Get the keystore variable, either the default debug keystore or from the
+    environment
+    """
+    if 'ANDROID_KEY_STORE' in os.environ:
+        return os.environ['ANDROID_KEY_STORE']
+    else:
+        return os.path.expanduser('~/.android/debug.keystore')
 
 def getSDK():
     """
@@ -633,6 +645,34 @@ apk = env.AndroidApp('Test')
         self.assertEquals(0, result.return_code)
         # check the apk contains *something*
         self.assertTrue(self.apk_contains('Test-debug.apk', 'lib/armeabi/libtest.so'))
+
+    def testProguard(self):
+        create_new_android_ndk_project(self)
+
+        self.write_file('src/com/example/android/MyActivity.java',
+                          '''\
+package com.example.android;
+import android.app.Activity;
+
+public class MyActivity extends Activity {
+}
+''')
+        self.write_file('main.scons', _TOOL_SETUP + '''
+env['PROGUARD_CONFIG'] = '$ANDROID_SDK/tools/proguard/proguard-android.txt:proguard-project.txt'
+env['JARSIGNER_FLAGS'] = ' -storepass android -keypass android'
+apk = env.AndroidApp('Test')
+''')
+        result = self.run_scons(['ANDROID_SDK='+getSDK(), 'ANDROID_KEY_STORE='+getKeyStore(),
+                                'ANDROID_KEY_NAME=androiddebugkey'])
+        self.assertEquals(0, result.return_code)
+        self.assertTrue(self.exists('proguard/Testobfuscated.jar'))
+        # make sure the size went down...
+        self.assertTrue(self.filesize('proguard/Testobfuscated.jar') < self.filesize('proguard/Testoriginal.jar'))
+
+        # make sure dex uses the obfuscated jar file..
+        dex_line = [line.strip() for line in result.out if line.find('dx --dex --output') != -1]
+        self.assertEquals(1, len(dex_line))
+        self.assertEquals(True, dex_line[0].endswith('obfuscated.jar'), dex_line[0])
 
 if __name__ == '__main__':
     sconstester.unittest.main()

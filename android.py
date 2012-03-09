@@ -99,6 +99,44 @@ def add_gnu_tools(env, abi):
     env['OBJCOPY'] = tool_prefix+'objcopy'
     env['STRIP'] = tool_prefix+'strip'
 
+def do_proguard(env, safe_name, classes, bin_classes, gen):
+    original_jar_name = 'proguard/' + safe_name + 'original.jar'
+    obfuscated_jar = 'proguard/' + safe_name + 'obfuscated.jar'
+    original_jar = env.Command(original_jar_name,
+                               [classes],
+                               ['$JAR cf $TARGET -C $DIR1 .',
+                                '$JAR uf $TARGET -C $DIR2 .'],
+                               DIR1=gen,
+                               DIR2=env.Dir(bin_classes).path)
+
+    includes = env['PROGUARD_CONFIG'].split(os.pathsep)
+    safe_includes = []
+    for include in includes:
+        if not os.path.exists(env.subst(include)):
+            print "** warning: %s does not exist" % include
+        else:
+            safe_includes.append(include)
+    args = '-include ' + (' -include '.join(safe_includes))
+    args += ' -libraryjars $ANDROID_JAR '
+    args += ' -dump $PG_DUMP'
+    args += ' -printseeds $PG_SEEDS'
+    args += ' -printusage $PG_USAGE'
+    args += ' -printmapping $PG_MAPPING'
+    pg_sources = [original_jar]
+    annotations = '$ANDROID_SDK/tools/support/annotations.jar'
+    if os.path.exists(env.subst(annotations)):
+        pg_sources.append(annotations)
+    dex_input = env.Proguard(obfuscated_jar, pg_sources,
+                             PROGUARD_ARGS=args,
+                             PS=os.pathsep,
+                             PG_DUMP=env.File('proguard/dump.txt'),
+                             PG_SEEDS=env.File('proguard/seeds.txt'),
+                             PG_USAGE=env.File('proguard/usage.txt'),
+                             PG_MAPPING=env.File('proguard/mapping.txt'))
+    env.SideEffect(['proguard/dump.txt', 'proguard/seeds.txt',
+                    'proguard/usage.txt', 'proguard/mapping.txt'], dex_input)
+    return dex_input
+
 def NdkBuild(env, library=None, inputs=None,
              manifest='#AndroidManifest.xml',
              app_abi='armeabi'):
@@ -290,6 +328,7 @@ def AndroidApp(env, name,
              AAPT_ARGS=aapt_args.split())
     env.Depends(generated_rfile, android_manifest)
 
+    release_build = env['ANDROID_KEY_STORE'] and env['ANDROID_KEY_NAME']
     dex = []
     if get_android_has_code(android_manifest.abspath):
         # compile java to classes
@@ -309,10 +348,18 @@ def AndroidApp(env, name,
 
         # dex file from classes
         dex_input = classes
+
+        dx_dir = env.Dir(bin_classes).path
+        has_pg = 'PROGUARD_CONFIG' in env and env['PROGUARD_CONFIG']
+        if release_build and has_pg:
+            dex_input = do_proguard(env, safe_name, classes, bin_classes, gen)
+            dx_dir = dex_input
+
         if has_cp:
             env['DX_CLASSPATH'] = env['JAVACLASSPATH'].split(os.pathsep)
             dex_input.extend(env['DX_CLASSPATH'])
-        dex = env.Dex(name+'classes.dex', dex_input, DX_DIR=env.Dir(bin_classes).path)
+
+        dex = env.Dex(name+'classes.dex', dex_input, DX_DIR=dx_dir)
         env.Depends(dex, dex_input)
 
     if not dex and not native_folder:
@@ -357,7 +404,7 @@ def AndroidApp(env, name,
     else:
         env.Depends(unaligned, [dex, tmp_package])
     env.Depends(unaligned, env.subst('$APK_BUILDER_JAR').split())
-    if env['ANDROID_KEY_STORE'] and env['ANDROID_KEY_NAME']:
+    if release_build:
         unaligned = env.JarSigner(name + '-unaligned.apk', unaligned)
 
     # zipalign -f 4 unaligned aligned
@@ -449,9 +496,15 @@ def generate(env, **kw):
     bld = Builder(action='$ZIPALIGN -f 4 $SOURCE $TARGET')
     env.Append(BUILDERS = { 'ZipAlign': bld })
 
-    jarsigner_cmd = ('$JARSIGNER -keystore $ANDROID_KEY_STORE'
+    jarsigner_cmd = ('$JARSIGNER $JARSIGNER_FLAGS -keystore $ANDROID_KEY_STORE'
                      ' -signedjar $TARGET $SOURCE $ANDROID_KEY_NAME')
     env.Append(BUILDERS = { 'JarSigner': Builder(action=jarsigner_cmd) })
+
+    proguard_cmd = ('$JAVA -jar $ANDROID_SDK/tools/proguard/lib/proguard.jar'
+                    ' -injars ${PS.join([s.path for s in SOURCES])}'
+                    ' -outjars $TARGET '
+                    ' $PROGUARD_ARGS')
+    env.Append(BUILDERS = {'Proguard': Builder(action=proguard_cmd)})
 
     env.AddMethod(AndroidApp)
     env.AddMethod(NdkBuild)

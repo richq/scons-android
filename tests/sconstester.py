@@ -73,6 +73,10 @@ class SConsTestCase(unittest.TestCase):
         filename = os.path.join(self.basedir, variant, name)
         return os.path.exists(filename)
 
+    def filesize(self, name, variant='build'):
+        filename = os.path.join(self.basedir, variant, name)
+        return os.stat(filename).st_size
+
     def get_file(self, name, variant='build'):
         """
         Open a file from within the test workspace
