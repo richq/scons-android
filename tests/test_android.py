@@ -674,5 +674,25 @@ apk = env.AndroidApp('Test')
         self.assertEquals(1, len(dex_line))
         self.assertEquals(True, dex_line[0].endswith('obfuscated.jar'), dex_line[0])
 
+    def testAnnotations(self):
+        create_android_project(self)
+
+        self.write_file('src/com/example/android/MyActivity.java',
+                          '''
+                          package com.example.android;
+                          import android.annotation.TargetApi;
+                          public class MyActivity {
+                              @TargetApi(8)
+                              public void onCreate() {
+                              }
+                          }
+                          ''')
+        self.write_file('main.scons', _TOOL_SETUP + '''
+env.AndroidApp('Test')
+''')
+        result = self.run_scons(['ANDROID_SDK='+getSDK()])
+        self.assertEquals(0, result.return_code)
+        self.assertTrue(self.exists('Test_bin/classes/com/example/android/MyActivity.class'))
+
 if __name__ == '__main__':
     sconstester.unittest.main()

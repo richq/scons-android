@@ -337,6 +337,7 @@ def AndroidApp(env, name,
         has_cp = 'JAVACLASSPATH' in env and env['JAVACLASSPATH']
         if has_cp:
             default_cp = env['JAVACLASSPATH'] + os.pathsep + default_cp
+        default_cp += os.pathsep + '$ANDROID_SDK/tools/support/annotations.jar'
         if type(source) == str:
             source = [source]
         classes = env.Java(target=bin_classes, source=source,
