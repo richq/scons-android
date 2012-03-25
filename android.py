@@ -343,7 +343,7 @@ def AndroidApp(env, name,
         classes = env.Java(target=bin_classes, source=source,
                            JAVABOOTCLASSPATH='$ANDROID_JAR',
                            JAVASOURCEPATH=gen.path,
-                           JAVACFLAGS='-target 1.5 -source 1.5 -g -encoding ascii'.split(),
+                           JAVACFLAGS='-target 1.5 -source 1.5 -g -Xlint -encoding ascii'.split(),
                            JAVACLASSPATH=default_cp)
         env.Depends(classes, rfile)
 
