@@ -10,6 +10,8 @@ from SCons.Builder import Builder
 from SCons.Defaults import DirScanner, Copy
 from SCons.Errors import UserError
 from xml.dom import minidom
+import SCons.Tool.javac
+from SCons.Tool.JavaCommon import parse_java_file
 
 NSURI = 'http://schemas.android.com/apk/res/android'
 
@@ -247,8 +249,6 @@ def NdkBuildLegacy(env, library=None, inputs=None, app_root='#.',
 
 # monkey patch emit_java_classes to do the Right Thing
 # otherwise generated classes have no package name and get rebuilt always
-import SCons.Tool.javac
-from SCons.Tool.JavaCommon import parse_java_file
 
 _DEFAULT_JAVA_EMITTER = SCons.Tool.javac.emit_java_classes
 
