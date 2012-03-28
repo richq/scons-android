@@ -114,7 +114,8 @@ def do_proguard(env, safe_name, classes, bin_classes, gen):
     includes = env['PROGUARD_CONFIG'].split(os.pathsep)
     safe_includes = []
     for include in includes:
-        if not os.path.exists(env.subst(include)):
+        include = str(env.File(env.subst(include)))
+        if not os.path.exists(include):
             print "** warning: %s does not exist" % include
         else:
             safe_includes.append(include)
@@ -135,6 +136,7 @@ def do_proguard(env, safe_name, classes, bin_classes, gen):
                              PG_SEEDS=env.File('proguard/seeds.txt'),
                              PG_USAGE=env.File('proguard/usage.txt'),
                              PG_MAPPING=env.File('proguard/mapping.txt'))
+    env.Depends(dex_input, safe_includes)
     env.SideEffect(['proguard/dump.txt', 'proguard/seeds.txt',
                     'proguard/usage.txt', 'proguard/mapping.txt'], dex_input)
     return dex_input
