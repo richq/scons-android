@@ -1,5 +1,16 @@
 # A SCons Tool to Build Android Applications
 
+## WARNING - this project is now no longer maintained
+
+The original ant-based Android build system was pretty slow, but it has
+improved a lot. Keeping up with the changes in the platform has become
+increasingly difficult for me, and the ["next gen" Android build system][2]
+looks like it will be Gradle-based.
+
+Finally, SCons itself seems to be in a rather tragic state, with little
+development in recent times and increasing bit-rot. You should probably
+not use it for new projects.
+
 ## Installation
 
 The easiest way to use this tool is to clone it into a `site_scons/site_tools`
@@ -207,3 +218,4 @@ There is no way to create an Android library project, only applications.
 Only compilation on Linux has been tested.
 
 [1]: http://developer.android.com/guide/publishing/app-signing.html
+[2]: http://tools.android.com/tech-docs/new-build-system/using-the-new-build-system
